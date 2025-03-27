@@ -1,0 +1,55 @@
+```
+└── 📁src
+    └── 📁app
+        └── 📁api
+            └── 📁auth
+                └── 📁[...nextauth]
+                    └── route.ts
+                └── 📁signup
+                    └── route.ts
+            └── 📁github
+            └── 📁liveblocks
+        └── 📁editor
+            └── 📁[sessionid]
+                └── page.tsx
+            └── layout.tsx
+            └── page.tsx
+        └── globals.css
+        └── layout.tsx
+        └── 📁login
+            └── page.tsx
+        └── page.tsx
+        └── 📁signup
+            └── page.tsx
+    └── 📁components
+        └── 📁auth
+            └── AuthProvider.tsx
+            └── Login.tsx
+            └── Signup.tsx
+        └── 📁collab-editor
+            └── chat-panel.tsx
+            └── collaborative-editor.tsx
+            └── editor.tsx
+            └── initial-file-dialog.tsx
+            └── room-join-modal.tsx
+            └── sidebar.tsx
+            └── toolbar.tsx
+            └── welcome-screen.tsx
+        └── 📁ui
+            └── accordion.tsx
+            └── alert-dialog.tsx
+            ... more shadcn components
+
+    └── 📁hooks
+        └── use-mobile.tsx
+        └── use-toast.ts
+    └── 📁lib
+        └── auth-opt.ts
+        └── monogdb.ts
+        └── utils.ts
+    └── 📁models
+        └── User.ts
+    └── 📁types
+        └── next-auth.d.ts
+        └── types.d.ts
+```

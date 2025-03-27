@@ -85,58 +85,63 @@ export default function Editor({ theme }: EditorProps) {
     }
   }
 
-  // Update file content in storage
-  const updateFileContent = useMutation(({ storage }, fileId: string, content: string) => {
-    const filesMap = storage.get("files")
-    if (!filesMap) return
+// Update file content in storage
+const updateFileContent = useMutation(({ storage }, fileId: string, content: string) => {
+  const filesMap = storage.get("files")
+  if (!filesMap) return
 
-    const file = filesMap.get(fileId)
-    if (file) {
-      filesMap.set(fileId, {
-        ...file,
-        content,
-        lastModified: Date.now(),
-      })
-    }
+  const file = filesMap.get(fileId)
+  if (file) {
+    filesMap.set(fileId, {
+      ...file,
+      content,
+      lastModified: Date.now(),
+    })
+  }
 
-    // Add timeline entry for modification
-    const timelineList = storage.get("timeline")
-    if (timelineList) {
-      const username = self?.presence.username || "Anonymous"
+  // Add timeline entry for modification
+  const timelineList = storage.get("timeline")
+  const username = self?.presence.username || "Anonymous"
+  
+  // Create the new timeline entry
+  const newEntry = {
+    id: Date.now().toString(),
+    fileId,
+    fileName: fileId.split("/").pop() || fileId,
+    user: username,
+    action: "modify" as const,
+    timestamp: Date.now(),
+  }
 
-      // Check if timelineList has unshift method (LiveList)
-      if (timelineList.unshift && typeof timelineList.unshift === "function") {
-        timelineList.unshift({
-          id: Date.now().toString(),
-          fileId,
-          fileName: fileId.split("/").pop() || fileId,
-          user: username,
-          action: "modify",
-          timestamp: Date.now(),
-        })
-
-        // Keep only the last 50 entries
-        if (timelineList.length > 50) {
-          timelineList.pop()
-        }
-      } else {
-        // Initialize timeline as LiveList if it's not already
-        storage.set(
-          "timeline",
-          new LiveList([
-            {
-              id: Date.now().toString(),
-              fileId,
-              fileName: fileId.split("/").pop() || fileId,
-              user: username,
-              action: "modify",
-              timestamp: Date.now(),
-            },
-          ]),
-        )
+  // Check if timelineList exists and is a LiveList
+  if (timelineList) {
+    // Check if it's a LiveList by checking for push method
+    if (typeof timelineList === 'object' && 'push' in timelineList && typeof timelineList.push === 'function') {
+      // It's a LiveList, use push method
+      (timelineList as any).push(newEntry);
+      
+      // Keep only the last 50 entries
+      if ((timelineList as any).length > 50) {
+        // Remove the oldest entry
+        (timelineList as any).delete(0);
       }
+    } else {
+      // Initialize timeline as LiveList if it's not already
+      storage.set(
+        "timeline",
+        new LiveList([newEntry])
+      );
     }
-  }, [])
+  } else {
+    // Initialize timeline as LiveList if it doesn't exist
+    storage.set(
+      "timeline",
+      new LiveList([newEntry])
+    );
+  }
+}, [self])
+
+
 
   // Handle content changes from the editor
   useEffect(() => {
@@ -400,7 +405,7 @@ export default function Editor({ theme }: EditorProps) {
 
   // Update the MonacoEditor component to use a dynamic theme
   return (
-    <div className="relative flex-1 overflow-hidden">
+    <div className="relative h-full w-full">
       <MonacoEditor
         height="100%"
         language={currentLanguage}

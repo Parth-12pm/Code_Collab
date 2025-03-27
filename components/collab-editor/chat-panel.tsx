@@ -8,6 +8,7 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { LiveList } from "@liveblocks/client"
 import { motion, AnimatePresence } from "framer-motion"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 
 // Define message type
 type Message = {
@@ -185,19 +186,28 @@ export default function ChatPanel() {
   return (
     <>
       {/* Chat toggle button */}
-      <Button
-        variant="default"
-        size="icon"
-        onClick={() => setIsOpen(!isOpen)}
-        className="fixed bottom-4 right-4 z-50 h-12 w-12 rounded-full shadow-lg"
-      >
-        <MessageSquare className="h-5 w-5" />
-        {unreadCount > 0 && (
-          <span className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-destructive text-xs font-bold text-destructive-foreground">
-            {unreadCount}
-          </span>
-        )}
-      </Button>
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="default"
+              size="icon"
+              onClick={() => setIsOpen(!isOpen)}
+              className="fixed bottom-4 right-4 z-50 h-12 w-12 rounded-full shadow-lg"
+            >
+              <MessageSquare className="h-5 w-5" />
+              {unreadCount > 0 && (
+                <span className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-destructive text-xs font-bold text-destructive-foreground">
+                  {unreadCount}
+                </span>
+              )}
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="left">
+            <p>Open chat</p>
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
 
       {/* Chat panel */}
       <AnimatePresence>
@@ -207,7 +217,7 @@ export default function ChatPanel() {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 20, scale: 0.95 }}
             transition={{ duration: 0.2 }}
-            className="fixed bottom-20 right-4 z-50 flex h-96 w-80 flex-col overflow-hidden rounded-lg border bg-card shadow-xl"
+            className="fixed bottom-20 right-4 z-50 flex h-[500px] w-80 flex-col overflow-hidden rounded-lg border bg-card shadow-xl"
           >
             <div className="flex items-center justify-between border-b p-3">
               <h3 className="font-medium">Chat</h3>

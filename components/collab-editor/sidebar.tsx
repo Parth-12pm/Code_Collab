@@ -1,5 +1,13 @@
 "use client"
 
+declare module 'react' {
+  interface InputHTMLAttributes<T> extends HTMLAttributes<T> {
+    // Add non-standard attributes
+    directory?: string;
+    webkitdirectory?: string;
+  }
+}
+
 import type React from "react"
 import { useState, useEffect, useRef } from "react"
 import { useStorage, useMutation, useStorageStatus, useMyPresence, useOthers } from "@/liveblocks.config"
@@ -20,6 +28,8 @@ import {
   Clock,
   GitCommit,
   MoreHorizontal,
+  GitBranch,
+  GitPullRequest,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
@@ -76,14 +86,27 @@ type TimelineEntry = {
   oldName?: string
 }
 
-export default function Sidebar() {
-  const [newFileName, setNewFileName] = useState("")
+// Define sync operation type
+type SyncOperation = {
+  _id: string
+  operation: "create_repo" | "commit" | "sync"
+  commitMessage?: string
+  status: "pending" | "completed" | "failed"
+  createdAt: string
+}
+
+interface SidebarProps {
+  sessionId?: string;
+}
+
+export default function Sidebar({sessionId}: SidebarProps) {
   const [newFileType, setNewFileType] = useState("js")
-  const [isNewFileDialogOpen, setIsNewFileDialogOpen] = useState(false)
   const [isNewFolderDialogOpen, setIsNewFolderDialogOpen] = useState(false)
   const [newFolderName, setNewFolderName] = useState("")
   const [currentPath, setCurrentPath] = useState("")
   const [folderStructure, setFolderStructure] = useState<FolderStructure>({})
+  const [newFileName, setNewFileName] = useState("")
+  const [isNewFileDialogOpen, setIsNewFileDialogOpen] = useState(false)
   const [contextMenuPosition, setContextMenuPosition] = useState({ x: 0, y: 0 })
   const [contextMenuTarget, setContextMenuTarget] = useState<{ path: string; type: "file" | "folder" } | null>(null)
   const [isRenameDialogOpen, setIsRenameDialogOpen] = useState(false)
@@ -95,6 +118,7 @@ export default function Sidebar() {
   const [isNavigateFolderDialogOpen, setIsNavigateFolderDialogOpen] = useState(false)
   const [folderNavigationPath, setFolderNavigationPath] = useState("")
   const [availableFolders, setAvailableFolders] = useState<string[]>([])
+  const [syncOperations, setSyncOperations] = useState<SyncOperation[]>([])
 
   const fileInputRef = useRef<HTMLInputElement>(null)
   const folderInputRef = useRef<HTMLInputElement>(null)
@@ -119,7 +143,7 @@ export default function Sidebar() {
   }, [])
 
   // Add timeline entry
-  const addTimelineEntry = useMutation(({ storage, self }, entry: Omit<TimelineEntry, "id" | "user">) => {
+  const addTimelineEntry = useMutation(({ storage, self }, entry: Omit<TimelineEntry, "id" | "user" | "timestamp">) => {
     const timelineList = storage.get("timeline")
     if (!timelineList) {
       // Initialize timeline as LiveList if it doesn't exist
@@ -136,7 +160,7 @@ export default function Sidebar() {
       )
       return
     }
-
+  
     const username = self.presence.username || "Anonymous"
     const newEntry: TimelineEntry = {
       id: Date.now().toString(),
@@ -144,19 +168,14 @@ export default function Sidebar() {
       ...entry,
       timestamp: Date.now(),
     }
-
-    // Check if timelineList has unshift method (LiveList)
-    if (timelineList.unshift && typeof timelineList.unshift === "function") {
-      // Add to the beginning of the list
-      timelineList.unshift(newEntry)
-
-      // Keep only the last 50 entries
-      if (timelineList.length > 50) {
-        timelineList.pop()
-      }
-    } else {
-      // Initialize timeline as LiveList if it's not already
-      storage.set("timeline", new LiveList([newEntry]))
+  
+    // Use LiveList's push method instead of unshift
+    timelineList.push(newEntry)
+  
+    // Keep only the last 50 entries - we can't use pop directly
+    if (timelineList.length > 50) {
+      // Remove the oldest entry (first one)
+      timelineList.delete(0)
     }
   }, [])
 
@@ -731,16 +750,13 @@ export default function Sidebar() {
   // Update timeline entries when timeline changes
   useEffect(() => {
     if (timeline) {
-      // Check if timeline is a LiveList with toArray method
-      if (timeline.toArray && typeof timeline.toArray === "function") {
-        setTimelineEntries(timeline.toArray())
-      } else if (Array.isArray(timeline)) {
-        // If it's already an array, use it directly
-        setTimelineEntries(timeline)
-      } else {
-        // Initialize with empty array if timeline is in an unexpected format
-        setTimelineEntries([])
+      // Convert LiveList to array
+      const entries: TimelineEntry[] = []
+      for (let i = 0; i < timeline.length; i++) {
+        entries.push(timeline[i])
       }
+      // Reverse to show newest first (since we're using push instead of unshift)
+      setTimelineEntries(entries.reverse())
     }
   }, [timeline])
 
@@ -912,7 +928,7 @@ export default function Sidebar() {
   }
 
   // Format timestamp
-  const formatTimestamp = (timestamp: number) => {
+  const formatTimestamp = (timestamp: number | string) => {
     const date = new Date(timestamp)
     return date.toLocaleString()
   }
@@ -932,6 +948,42 @@ export default function Sidebar() {
         return "text-muted-foreground"
     }
   }
+
+    // Fetch GitHub sync operations
+    useEffect(() => {
+      if (sessionId) {
+        const fetchSyncOperations = async () => {
+          try {
+            const response = await fetch(`/api/sessions/${sessionId}/sync-operations`)
+            if (response.ok) {
+              const data = await response.json()
+              setSyncOperations(data)
+            }
+          } catch (error) {
+            console.error("Error fetching sync operations:", error)
+          }
+        }
+  
+        fetchSyncOperations()
+  
+        // Set up polling to refresh sync operations every 30 seconds
+        const interval = setInterval(fetchSyncOperations, 30000)
+        return () => clearInterval(interval)
+      }
+    }, [sessionId])
+  
+    // Update timeline entries when timeline changes
+    useEffect(() => {
+      if (timeline) {
+        // Convert LiveList to array
+        const entries: TimelineEntry[] = []
+        for (let i = 0; i < timeline.length; i++) {
+          entries.push(timeline[i])
+        }
+        // Reverse to show newest first (since we're using push instead of unshift)
+        setTimelineEntries(entries.reverse())
+      }
+    }, [timeline])
 
   // Render a file or folder
   const renderItem = (name: string, item: FolderStructure[string], path: string, depth = 0) => {
@@ -1537,8 +1589,8 @@ export default function Sidebar() {
         </div>
       </ScrollArea>
 
-      {/* Timeline section */}
-      <Collapsible
+ {/* Updated Timeline section */}
+ <Collapsible
         defaultOpen={true}
         open={timelineOpen}
         onOpenChange={setTimelineOpen}
@@ -1554,6 +1606,51 @@ export default function Sidebar() {
         <CollapsibleContent>
           <ScrollArea className="h-40">
             <div className="p-2 space-y-2">
+              {/* GitHub Sync Operations */}
+              {syncOperations.length > 0 && (
+                <div className="mb-2">
+                  <h4 className="text-xs font-medium text-muted-foreground mb-1">GitHub Activity</h4>
+                  {syncOperations.slice(0, 5).map((op) => (
+                    <div key={op._id} className="text-xs border-l-2 border-blue-500 pl-2 py-1 mb-2">
+                      <div className="flex items-center">
+                        {op.operation === "create_repo" ? (
+                          <GitBranch className="h-3 w-3 mr-1 text-blue-500" />
+                        ) : op.operation === "commit" ? (
+                          <GitCommit className="h-3 w-3 mr-1 text-green-500" />
+                        ) : (
+                          <GitPullRequest className="h-3 w-3 mr-1 text-purple-500" />
+                        )}
+                        <span className="font-medium">
+                          {op.operation === "create_repo"
+                            ? "Repository Created"
+                            : op.operation === "commit"
+                              ? "Committed Changes"
+                              : "Synced Changes"}
+                        </span>
+                      </div>
+                      {op.commitMessage && <div className="text-muted-foreground mt-1 italic">{op.commitMessage}</div>}
+                      <div className="flex items-center text-muted-foreground mt-1">
+                        <span>{formatTimestamp(op.createdAt)}</span>
+                        <span className="mx-1">•</span>
+                        <span
+                          className={`px-1 rounded text-xs ${
+                            op.status === "completed"
+                              ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
+                              : op.status === "failed"
+                                ? "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200"
+                                : "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200"
+                          }`}
+                        >
+                          {op.status}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* File Changes Timeline */}
+              <h4 className="text-xs font-medium text-muted-foreground mb-1">File Changes</h4>
               {timelineEntries.length > 0 ? (
                 timelineEntries.map((entry) => (
                   <div key={entry.id} className="text-xs border-l-2 border-muted pl-2 py-1">
