@@ -103,7 +103,17 @@ export function SignupForm({
                   variant="outline"
                   type="button"
                   className="w-full"
-                  onClick={() => signIn("github", { callbackUrl: "/editor" })}
+                  onClick={() =>
+                    signIn("github", {
+                      callbackUrl: "/editor",
+                      authorization: {
+                        params: {
+                          scope: "read:user user:email repo",
+                          prompt: "consent",
+                        },
+                      },
+                    })
+                  }
                 >
                   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
                     <path

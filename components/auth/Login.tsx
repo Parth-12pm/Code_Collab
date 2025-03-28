@@ -99,7 +99,17 @@ export function LoginForm({
                   variant="outline"
                   type="button"
                   className="w-full"
-                  onClick={() => signIn("github", { callbackUrl: "/editor" })}
+                  onClick={() =>
+                    signIn("github", {
+                      callbackUrl: "/editor",
+                      authorization: {
+                        params: {
+                          scope: "read:user user:email repo",
+                          prompt: "consent",
+                        },
+                      },
+                    })
+                  }
                 >
                   <span className="sr-only">Login with GitHub</span>
                 </Button>

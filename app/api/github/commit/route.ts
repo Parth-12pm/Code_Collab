@@ -4,183 +4,212 @@ import { authOptions } from "@/lib/auth-opt"
 import { connectToDatabase } from "@/lib/monogdb"
 import EditorSession from "@/models/EditorSession"
 import SyncOperation from "@/models/SyncOperation"
+import { Octokit } from "@octokit/rest"
 
 // POST /api/github/commit - Commit changes to a GitHub repository
 export async function POST(req: NextRequest) {
+  console.log("GitHub commit API called")
+
   try {
     const session = await getServerSession(authOptions)
+    console.log("Session user:", session?.user?.email)
 
     if (!session || !session.user || !session.user.githubAccessToken) {
+      console.log("GitHub authentication required - no token found")
       return NextResponse.json({ error: "GitHub authentication required" }, { status: 401 })
     }
 
     const { sessionId, files, commitMessage } = await req.json()
+    console.log("Request body:", { sessionId, filesCount: files?.length, commitMessage })
 
-    if (!sessionId || !files || !Array.isArray(files) || files.length === 0) {
-      return NextResponse.json({ error: "Session ID and files are required" }, { status: 400 })
+    if (!sessionId) {
+      console.log("Session ID is required")
+      return NextResponse.json({ error: "Session ID is required" }, { status: 400 })
+    }
+
+    if (!files || !Array.isArray(files) || files.length === 0) {
+      console.log("Files are required and must be a non-empty array")
+      return NextResponse.json({ error: "Files are required and must be an array" }, { status: 400 })
+    }
+
+    if (!commitMessage) {
+      console.log("Commit message is required")
+      return NextResponse.json({ error: "Commit message is required" }, { status: 400 })
     }
 
     await connectToDatabase()
+    console.log("Connected to database")
 
     // Find the editor session
     const editorSession = await EditorSession.findOne({ roomId: sessionId })
+    console.log("Editor session found:", !!editorSession)
 
     if (!editorSession) {
+      console.log("Session not found")
       return NextResponse.json({ error: "Session not found" }, { status: 404 })
     }
 
     // Check if the user is the owner
-    if (editorSession.createdBy !== session.user.id) {
+    const isOwner = editorSession.createdBy === session.user.id
+    console.log("User is owner:", isOwner)
+
+    if (!isOwner) {
+      console.log("Only the owner can commit changes")
       return NextResponse.json({ error: "Only the owner can commit changes" }, { status: 403 })
     }
 
     // Check if a repository exists
     if (!editorSession.repositoryInfo || !editorSession.repositoryInfo.repoId) {
+      console.log("No repository exists for this session")
       return NextResponse.json({ error: "No repository exists for this session" }, { status: 400 })
     }
 
     const { repoOwner, repoName } = editorSession.repositoryInfo
+    console.log(`Committing to ${repoOwner}/${repoName} with ${files.length} files`)
 
-    // Get the latest commit SHA
-    const branchResponse = await fetch(`https://api.github.com/repos/${repoOwner}/${repoName}/branches/main`, {
-      headers: {
-        Authorization: `token ${session.user.githubAccessToken}`,
-      },
-    })
+    try {
+      // Initialize Octokit with the user's GitHub token
+      const octokit = new Octokit({
+        auth: session.user.githubAccessToken,
+      })
 
-    if (!branchResponse.ok) {
-      const error = await branchResponse.json()
-      console.error("GitHub API error:", error)
-      return NextResponse.json({ error: "Failed to get branch information" }, { status: branchResponse.status })
-    }
+      // Get the default branch (main or master)
+      let defaultBranch = "main"
+      let latestCommitSha
 
-    const branchData = await branchResponse.json()
-    const latestCommitSha = branchData.commit.sha
-
-    // Create a new tree with the files
-    const treeItems = await Promise.all(
-      files.map(async (file) => {
-        if (file.action === "delete") {
-          return {
-            path: file.path,
-            mode: "100644",
-            type: "blob",
-            sha: null, // null SHA means delete the file
-          }
+      try {
+        // Try to get the main branch
+        const { data: mainBranch } = await octokit.repos.getBranch({
+          owner: repoOwner,
+          repo: repoName,
+          branch: "main",
+        })
+        defaultBranch = "main"
+        latestCommitSha = mainBranch.commit.sha
+      } catch (mainBranchError) {
+        // If main branch doesn't exist, try master
+        try {
+          const { data: masterBranch } = await octokit.repos.getBranch({
+            owner: repoOwner,
+            repo: repoName,
+            branch: "master",
+          })
+          defaultBranch = "master"
+          latestCommitSha = masterBranch.commit.sha
+        } catch (masterBranchError) {
+          console.error("Error getting branch information:", masterBranchError)
+          throw new Error("Failed to get branch information")
         }
+      }
 
-        // For create or update, create a blob with the content
-        const blobResponse = await fetch(`https://api.github.com/repos/${repoOwner}/${repoName}/git/blobs`, {
-          method: "POST",
-          headers: {
-            Authorization: `token ${session.user.githubAccessToken}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
+      console.log(`Using ${defaultBranch} branch with commit SHA: ${latestCommitSha}`)
+
+      // Create blobs for each file
+      const fileBlobs = await Promise.all(
+        files.map(async (file) => {
+          const { data: blob } = await octokit.git.createBlob({
+            owner: repoOwner,
+            repo: repoName,
             content: file.content,
             encoding: "utf-8",
-          }),
-        })
+          })
 
-        if (!blobResponse.ok) {
-          throw new Error(`Failed to create blob for ${file.path}`)
-        }
+          return {
+            path: file.path,
+            mode: "100644" as const, // Regular file - use literal type
+            type: "blob" as const,
+            sha: blob.sha,
+          }
+        }),
+      )
 
-        const blob = await blobResponse.json()
+      console.log(`Created ${fileBlobs.length} blobs`)
 
-        return {
-          path: file.path,
-          mode: "100644",
-          type: "blob",
-          sha: blob.sha,
-        }
-      }),
-    )
-
-    // Create a new tree
-    const treeResponse = await fetch(`https://api.github.com/repos/${repoOwner}/${repoName}/git/trees`, {
-      method: "POST",
-      headers: {
-        Authorization: `token ${session.user.githubAccessToken}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
+      // Create a new tree
+      const { data: tree } = await octokit.git.createTree({
+        owner: repoOwner,
+        repo: repoName,
         base_tree: latestCommitSha,
-        tree: treeItems,
-      }),
-    })
+        tree: fileBlobs,
+      })
 
-    if (!treeResponse.ok) {
-      const error = await treeResponse.json()
-      console.error("GitHub API error:", error)
-      return NextResponse.json({ error: "Failed to create tree" }, { status: treeResponse.status })
-    }
+      console.log(`Created tree with SHA: ${tree.sha}`)
 
-    const treeData = await treeResponse.json()
-
-    // Create a commit
-    const commitResponse = await fetch(`https://api.github.com/repos/${repoOwner}/${repoName}/git/commits`, {
-      method: "POST",
-      headers: {
-        Authorization: `token ${session.user.githubAccessToken}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        message: commitMessage || "Update from CodeCollab",
-        tree: treeData.sha,
+      // Create a commit
+      const { data: commit } = await octokit.git.createCommit({
+        owner: repoOwner,
+        repo: repoName,
+        message: commitMessage,
+        tree: tree.sha,
         parents: [latestCommitSha],
-      }),
-    })
+      })
 
-    if (!commitResponse.ok) {
-      const error = await commitResponse.json()
-      console.error("GitHub API error:", error)
-      return NextResponse.json({ error: "Failed to create commit" }, { status: commitResponse.status })
+      console.log(`Created commit with SHA: ${commit.sha}`)
+
+      // Update the reference
+      await octokit.git.updateRef({
+        owner: repoOwner,
+        repo: repoName,
+        ref: `heads/${defaultBranch}`,
+        sha: commit.sha,
+      })
+
+      console.log(`Updated reference to point to new commit`)
+
+      // Update the last synced timestamp
+      editorSession.repositoryInfo.lastSyncedAt = new Date()
+      await editorSession.save()
+      console.log("Updated last synced timestamp")
+
+      // Create a sync operation record
+      const syncOp = await SyncOperation.create({
+        sessionId: sessionId,
+        userId: session.user.id,
+        operation: "commit",
+        status: "completed",
+        processedAt: new Date(),
+        commitMessage: commitMessage,
+      })
+      console.log("Created sync operation:", syncOp._id)
+
+      return NextResponse.json({
+        message: "Changes committed successfully",
+        commit: {
+          sha: commit.sha,
+          url: `https://github.com/${repoOwner}/${repoName}/commit/${commit.sha}`,
+        },
+      })
+    } catch (githubError) {
+      console.error("Error during GitHub API call:", githubError)
+
+      // Create a failed sync operation record
+      await SyncOperation.create({
+        sessionId: sessionId,
+        userId: session.user.id,
+        operation: "commit",
+        status: "failed",
+        error: (githubError as Error).message,
+        processedAt: new Date(),
+        commitMessage: commitMessage,
+      })
+
+      return NextResponse.json(
+        {
+          error: "Error during GitHub API call",
+          details: (githubError as Error).message,
+        },
+        { status: 500 },
+      )
     }
-
-    const commitData = await commitResponse.json()
-
-    // Update the reference
-    const refResponse = await fetch(`https://api.github.com/repos/${repoOwner}/${repoName}/git/refs/heads/main`, {
-      method: "PATCH",
-      headers: {
-        Authorization: `token ${session.user.githubAccessToken}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        sha: commitData.sha,
-        force: false,
-      }),
-    })
-
-    if (!refResponse.ok) {
-      const error = await refResponse.json()
-      console.error("GitHub API error:", error)
-      return NextResponse.json({ error: "Failed to update reference" }, { status: refResponse.status })
-    }
-
-    // Update the last synced timestamp
-    editorSession.repositoryInfo.lastSyncedAt = new Date()
-    await editorSession.save()
-
-    // Create a sync operation record
-    await SyncOperation.create({
-      sessionId: sessionId,
-      userId: session.user.id,
-      operation: "commit",
-      status: "completed",
-      processedAt: new Date(),
-      files: files,
-      commitMessage: commitMessage || "Update from CodeCollab",
-    })
-
-    return NextResponse.json({
-      message: "Changes committed successfully",
-      commit: commitData,
-    })
   } catch (error) {
     console.error("Error committing changes:", error)
-    return NextResponse.json({ error: "Failed to commit changes" }, { status: 500 })
+    return NextResponse.json(
+      {
+        error: "Failed to commit changes",
+        details: (error as Error).message,
+      },
+      { status: 500 },
+    )
   }
 }
 

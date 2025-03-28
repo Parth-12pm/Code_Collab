@@ -10,7 +10,9 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
-import { Github, Loader2 } from "lucide-react"
+import { FaGithub } from "react-icons/fa";
+import {  Loader2 } from "lucide-react"
+import { useStorage } from "@/liveblocks.config"
 import { useSession } from "next-auth/react"
 import { useToast } from "@/components/ui/use-toast"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -20,13 +22,9 @@ import { Badge } from "@/components/ui/badge"
 
 interface GitHubButtonProps {
   sessionId: string
-  files?: Array<{
-    path: string
-    content: string
-  }>
 }
 
-export default function GitHubButton({ sessionId, files = [] }: GitHubButtonProps) {
+export default function GitHubButton({ sessionId }: GitHubButtonProps) {
   const [isOpen, setIsOpen] = useState(false)
   const [isCreatingRepo, setIsCreatingRepo] = useState(false)
   const [isCommitting, setIsCommitting] = useState(false)
@@ -37,6 +35,19 @@ export default function GitHubButton({ sessionId, files = [] }: GitHubButtonProp
   const [isLoading, setIsLoading] = useState(true)
   const { data: session } = useSession()
   const { toast } = useToast()
+
+  // Get files from storage
+  const files = useStorage((root) => root.files)
+
+  // Convert LiveMap to array of files
+  const fileArray = files
+    ? Array.from(files.entries())
+        .filter(([path]) => !path.endsWith("/.folder")) // Filter out folder placeholders
+        .map(([path, fileData]) => ({
+          path,
+          content: fileData.content,
+        }))
+    : []
 
   // Fetch repository info and sync operations
   const fetchData = async () => {
@@ -79,12 +90,12 @@ export default function GitHubButton({ sessionId, files = [] }: GitHubButtonProp
         }),
       })
 
+      const data = await response.json()
+
       if (!response.ok) {
-        const error = await response.json()
-        throw new Error(error.error || "Failed to create GitHub repository")
+        throw new Error(data.error || "Failed to create GitHub repository")
       }
 
-      const data = await response.json()
       setRepoInfo(data.repository)
 
       toast({
@@ -117,6 +128,15 @@ export default function GitHubButton({ sessionId, files = [] }: GitHubButtonProp
       return
     }
 
+    if (fileArray.length === 0) {
+      toast({
+        title: "No Files to Commit",
+        description: "There are no files to commit.",
+        variant: "destructive",
+      })
+      return
+    }
+
     try {
       setIsCommitting(true)
 
@@ -127,14 +147,15 @@ export default function GitHubButton({ sessionId, files = [] }: GitHubButtonProp
         },
         body: JSON.stringify({
           sessionId,
-          files,
+          files: fileArray,
           commitMessage,
         }),
       })
 
+      const data = await response.json()
+
       if (!response.ok) {
-        const error = await response.json()
-        throw new Error(error.error || "Failed to commit changes")
+        throw new Error(data.error || "Failed to commit changes")
       }
 
       toast({
@@ -197,7 +218,7 @@ export default function GitHubButton({ sessionId, files = [] }: GitHubButtonProp
     <Dialog open={isOpen} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>
         <Button variant="outline" size="sm" className="gap-2">
-          <Github className="h-4 w-4" />
+          <FaGithub className="h-4 w-4" />
           <span className="hidden md:inline">GitHub</span>
         </Button>
       </DialogTrigger>
@@ -238,7 +259,7 @@ export default function GitHubButton({ sessionId, files = [] }: GitHubButtonProp
                         </>
                       ) : (
                         <>
-                          <Github className="mr-2 h-4 w-4" />
+                          <FaGithub className="mr-2 h-4 w-4" />
                           Create GitHub Repository
                         </>
                       )}
@@ -260,11 +281,11 @@ export default function GitHubButton({ sessionId, files = [] }: GitHubButtonProp
                     </div>
 
                     <div className="mb-4">
-                      <h3 className="text-sm font-medium mb-2">Files to Commit</h3>
+                      <h3 className="text-sm font-medium mb-2">Files to Commit ({fileArray.length})</h3>
                       <ScrollArea className="h-48 border rounded-md">
                         <div className="p-2">
-                          {files.length > 0 ? (
-                            files.map((file) => (
+                          {fileArray.length > 0 ? (
+                            fileArray.map((file) => (
                               <div key={file.path} className="py-1 px-2 hover:bg-accent rounded-md">
                                 <div className="text-sm truncate">{file.path}</div>
                               </div>
@@ -278,7 +299,7 @@ export default function GitHubButton({ sessionId, files = [] }: GitHubButtonProp
 
                     <Button
                       onClick={commitChanges}
-                      disabled={isCommitting || !commitMessage.trim() || files.length === 0}
+                      disabled={isCommitting || !commitMessage.trim() || fileArray.length === 0}
                       className="w-full"
                     >
                       {isCommitting ? (
@@ -288,7 +309,7 @@ export default function GitHubButton({ sessionId, files = [] }: GitHubButtonProp
                         </>
                       ) : (
                         <>
-                          <Github className="mr-2 h-4 w-4" />
+                          <FaGithub className="mr-2 h-4 w-4" />
                           Commit Changes
                         </>
                       )}
@@ -377,7 +398,7 @@ export default function GitHubButton({ sessionId, files = [] }: GitHubButtonProp
                       className="w-full"
                       onClick={() => window.open(repoInfo.repoUrl, "_blank")}
                     >
-                      <Github className="mr-2 h-4 w-4" />
+                      <FaGithub className="mr-2 h-4 w-4" />
                       Open in GitHub
                     </Button>
                   </div>

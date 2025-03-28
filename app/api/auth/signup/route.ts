@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { connectToDatabase } from "@/lib/db";
+import { connectToDatabase } from "@/lib/monogdb";
 import User from "@/models/User";
 
 export async function POST(req: NextRequest) {
@@ -12,7 +12,7 @@ export async function POST(req: NextRequest) {
         { status: 400 }
       );
     }
-    
+
     await connectToDatabase();
 
     const existingUser = await User.findOne({ email });
