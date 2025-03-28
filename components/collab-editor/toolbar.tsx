@@ -1,5 +1,11 @@
 "use client";
-import { useOthers, useStorage, useSelf } from "@/liveblocks.config";
+import {
+  useOthers,
+  useStorage,
+  useSelf,
+  useBroadcastEvent,
+  useEventListener,
+} from "@/liveblocks.config";
 import {
   Copy,
   Download,
@@ -12,6 +18,8 @@ import {
   ArrowLeft,
   Share2,
   Github,
+  Video,
+  VideoOff,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -35,6 +43,7 @@ import FileSaver from "file-saver";
 import { useEffect, useState } from "react";
 import GitHubIntegration from "./github-integration";
 import { useToast } from "@/components/ui/use-toast";
+import VideoCall from "@/components/collab-editor/video-call";
 
 interface ToolbarProps {
   roomId: string;
@@ -46,6 +55,10 @@ interface ToolbarProps {
   sessionName: string;
   onBackToDashboard: () => void;
 }
+
+// Event types for video call
+const VIDEO_CALL_START = "VIDEO_CALL_START";
+const VIDEO_CALL_END = "VIDEO_CALL_END";
 
 export default function Toolbar({
   roomId,
@@ -66,6 +79,20 @@ export default function Toolbar({
     repoUrl?: string;
     lastSyncedAt?: string;
   } | null>(null);
+  const [showVideoCall, setShowVideoCall] = useState(false);
+
+  // Broadcast events to other users
+  const broadcast = useBroadcastEvent();
+
+  // Listen for video call events from other users
+  useEventListener(({ event }) => {
+    if (!event || typeof event !== "object" || !("type" in event)) return;
+    if (event.type === VIDEO_CALL_START) {
+      setShowVideoCall(true);
+    } else if (event.type === VIDEO_CALL_END) {
+      setShowVideoCall(false);
+    }
+  });
 
   // Check if we're on mobile
   useEffect(() => {
@@ -124,6 +151,34 @@ export default function Toolbar({
     });
   };
 
+  // Toggle video call and broadcast to other users
+  const toggleVideoCall = () => {
+    const newState = !showVideoCall;
+    setShowVideoCall(newState);
+
+    // Broadcast event to other users
+    broadcast({
+      type: newState ? VIDEO_CALL_START : VIDEO_CALL_END,
+    });
+
+    if (newState) {
+      toast({
+        title: "Video Call Started",
+        description: "Others in this session can join your video call",
+      });
+    }
+  };
+
+  // Handle closing the video call
+  const handleCloseVideoCall = () => {
+    setShowVideoCall(false);
+
+    // Broadcast event to other users
+    broadcast({
+      type: VIDEO_CALL_END,
+    });
+  };
+
   // Download workspace as zip
   const downloadWorkspace = async () => {
     if (!files || files.size === 0) return;
@@ -155,6 +210,8 @@ export default function Toolbar({
             <ArrowLeft className="h-4 w-4" />
             <span className="sr-only md:not-sr-only md:ml-2">Back</span>
           </Button>
+
+          <h1 className="text-xl font-bold hidden md:block">CodeCollab</h1>
         </div>
 
         <div className="flex-1 mx-4">
@@ -237,6 +294,35 @@ export default function Toolbar({
             <Users className="h-4 w-4 text-muted-foreground" />
             <span className="text-sm">{others.length + 1}</span>
           </div>
+
+          {/* Video call button - visible to all users */}
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant={showVideoCall ? "default" : "outline"}
+                  size="sm"
+                  className="gap-2"
+                  onClick={toggleVideoCall}
+                >
+                  {showVideoCall ? (
+                    <>
+                      <VideoOff className="h-4 w-4" />
+                      <span className="hidden md:inline">End Call</span>
+                    </>
+                  ) : (
+                    <>
+                      <Video className="h-4 w-4" />
+                      <span className="hidden md:inline">Video Call</span>
+                    </>
+                  )}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>{showVideoCall ? "End video call" : "Start video call"}</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
 
           {/* Only show GitHub integration for the session owner */}
           {isOwner && <GitHubIntegration roomId={roomId} />}
@@ -389,6 +475,15 @@ export default function Toolbar({
             ))}
           </div>
         </div>
+      )}
+
+      {/* Video call component - using your existing component */}
+      {showVideoCall && (
+        <VideoCall
+          onClose={handleCloseVideoCall}
+          sessionId={roomId}
+          username={username}
+        />
       )}
     </div>
   );

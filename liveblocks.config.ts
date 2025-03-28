@@ -49,7 +49,7 @@ type RoomSettings = {
 };
 
 // Define presence types
-type Presence = {
+export type Presence = {
   cursor: { line: number; column: number } | null;
   selection: {
     startLine: number;
@@ -62,7 +62,7 @@ type Presence = {
 };
 
 // Define storage types
-type Storage = {
+export type Storage = {
   document: LiveObject<{
     content: string;
   }>;
