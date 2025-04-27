@@ -129,8 +129,8 @@ export default function ChatPanel() {
         const unread = storageMessages.filter((msg) => !msg.readBy.includes(username)).length
         setUnreadCount(unread)
       }
-    } else if (storageMessages && typeof storageMessages.toArray === "function") {
-      const messages = storageMessages.toArray()
+    } else if (storageMessages) {
+      const messages = Array.from(storageMessages)
       setLocalMessages(messages)
 
       // Count unread messages

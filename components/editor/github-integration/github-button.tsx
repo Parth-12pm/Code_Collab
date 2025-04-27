@@ -10,8 +10,8 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
-import { FaGithub } from "react-icons/fa";
-import {  Loader2 } from "lucide-react"
+import { FaGithub } from "react-icons/fa"
+import { Loader2 } from "lucide-react"
 import { useStorage } from "@/liveblocks.config"
 import { useSession } from "next-auth/react"
 import { useToast } from "@/components/ui/use-toast"

@@ -209,19 +209,12 @@ document.getElementById("app").innerHTML = \`
         }}
       >
         <SandpackLayout className="h-full flex-1 !p-0 !m-0">
-          <ResizablePanelGroup direction="vertical" className="w-full h-full">
-            <ResizablePanel defaultSize={70} minSize={30} className="h-full">
               <div className="h-full w-full">
                 <SandpackPreviewComponent showNavigator={true} className="w-full h-full" />
               </div>
-            </ResizablePanel>
-            <ResizableHandle withHandle />
-            <ResizablePanel defaultSize={30} minSize={20} className="h-full">
               <div className="h-full w-full">
                 <SandpackConsole className="w-full h-full" />
               </div>
-            </ResizablePanel>
-          </ResizablePanelGroup>
         </SandpackLayout>
       </SandpackProvider>
     </div>

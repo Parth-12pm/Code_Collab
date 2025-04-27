@@ -12,12 +12,13 @@ import ChatPanel from "@/components/collab-editor/chat-panel";
 import { Toaster } from "@/components/ui/toaster";
 import { useToast } from "@/components/ui/use-toast";
 import { Loader2 } from "lucide-react";
-import { CodeExecution } from "./code-execution";
+import { CodeExecution } from "@/components/collab-editor/code-execution";
 import {
   ResizableHandle,
   ResizablePanel,
   ResizablePanelGroup,
 } from "@/components/ui/resizable";
+import type { Storage } from "@/liveblocks.config";
 
 interface CollaborativeEditorProps {
   sessionId: string;
@@ -36,6 +37,8 @@ export default function CollaborativeEditor({
   const [editorSession, setEditorSession] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [theme, setTheme] = useState<"light" | "dark">("dark");
+  const [showTerminal, setShowTerminal] = useState(false);
+
 
   // Fetch session data
   useEffect(() => {
@@ -106,6 +109,11 @@ export default function CollaborativeEditor({
     }
   }, [sessionId, authStatus, router, toast]);
 
+  // Toggle terminal
+  const toggleTerminal = () => {
+    setShowTerminal(!showTerminal);
+  };
+
   // Show loading state while fetching session data
   if (loading || authStatus === "loading") {
     return (
@@ -130,6 +138,21 @@ export default function CollaborativeEditor({
   // Check if user is the owner
   const isOwner = editorSession?.createdBy === authSession?.user?.id;
 
+  // Define the initial storage with proper typing
+  const initialStorage: Storage = {
+    document: new LiveObject({ content: "" }),
+    messages: new LiveList([]),
+    files: new LiveMap(),
+    timeline: new LiveList([]),
+    roomSettings: new LiveObject({
+      isPrivate,
+      password: "",
+      createdBy: username,
+      createdAt: new Date().toISOString(),
+    }),
+    executionResults: new LiveMap(),
+  };
+
   return (
     <div className={theme}>
       <RoomProvider
@@ -140,19 +163,7 @@ export default function CollaborativeEditor({
           username,
           currentFile: null,
         }}
-        initialStorage={{
-          document: new LiveObject({ content: "" }),
-          messages: new LiveList([]),
-          files: new LiveMap(),
-          timeline: new LiveList([]),
-          roomSettings: new LiveObject({
-            isPrivate,
-            password: "",
-            createdBy: username,
-            createdAt: new Date().toISOString(),
-          }),
-          executionResults: new LiveMap(),
-        }}
+        initialStorage={initialStorage}
       >
         <div className="flex h-screen flex-col bg-background text-foreground">
           <Toolbar
@@ -164,6 +175,7 @@ export default function CollaborativeEditor({
             isOwner={isOwner}
             sessionName={sessionName}
             onBackToDashboard={() => router.push("/editor")}
+            onToggleTerminal={toggleTerminal}
           />
           <div className="flex flex-1 overflow-hidden">
             <ResizablePanelGroup direction="horizontal" className="flex-1">

@@ -20,6 +20,7 @@ import {
   Github,
   Video,
   VideoOff,
+  Terminal,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -41,9 +42,9 @@ import {
 import JSZip from "jszip";
 import FileSaver from "file-saver";
 import { useEffect, useState } from "react";
-import GitHubIntegration from "./github-integration";
 import { useToast } from "@/components/ui/use-toast";
 import VideoCall from "@/components/collab-editor/video-call";
+import GitHubButton from "@/components/editor/github-integration/github-button";
 
 interface ToolbarProps {
   roomId: string;
@@ -54,6 +55,7 @@ interface ToolbarProps {
   isOwner: boolean;
   sessionName: string;
   onBackToDashboard: () => void;
+  onToggleTerminal?: () => void;
 }
 
 // Event types for video call
@@ -69,6 +71,7 @@ export default function Toolbar({
   isOwner,
   sessionName,
   onBackToDashboard,
+  onToggleTerminal,
 }: ToolbarProps) {
   const others = useOthers();
   const files = useStorage((root) => root.files);
@@ -295,6 +298,28 @@ export default function Toolbar({
             <span className="text-sm">{others.length + 1}</span>
           </div>
 
+          {/* Terminal button */}
+          {onToggleTerminal && (
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-2"
+                    onClick={onToggleTerminal}
+                  >
+                    <Terminal className="h-4 w-4" />
+                    <span className="hidden md:inline">Terminal</span>
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Toggle terminal</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          )}
+
           {/* Video call button - visible to all users */}
           <TooltipProvider>
             <Tooltip>
@@ -324,8 +349,8 @@ export default function Toolbar({
             </Tooltip>
           </TooltipProvider>
 
-          {/* Only show GitHub integration for the session owner */}
-          {isOwner && <GitHubIntegration roomId={roomId} />}
+          {/* GitHub button */}
+          <GitHubButton sessionId={roomId} />
 
           <TooltipProvider>
             <Tooltip>

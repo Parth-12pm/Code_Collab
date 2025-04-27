@@ -1,9 +1,9 @@
 import React from "react";
-import { LoginForm } from "@/components/auth/Login";
+import AuthPage from "@/components/auth/AuthPage";
 
 function LoginPage() {
   return (
-      <LoginForm />
+      <AuthPage />
   );
 }
 

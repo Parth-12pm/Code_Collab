@@ -1,26 +1,108 @@
 "use client";
-import { useState } from "react";
-import { signIn } from "next-auth/react";
+import { useState, useEffect } from "react";
+import { signIn, useSession } from "next-auth/react";
 import { motion } from "framer-motion";
 import { FiGithub, FiMail, FiLock, FiUser, FiGlobe } from "react-icons/fi";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useRouter } from "next/navigation";
 
 export default function AuthPage() {
+  const { data: session, status } = useSession();
+  const router = useRouter();
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
   const [secretQ, setSecretQ] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
-  const handleSubmit = (e: React.FormEvent) => {
+  useEffect(() => {
+    if (status === "authenticated") {
+      router.push("/editor");
+    }
+  }, [status, router]);
+
+  if (status === "loading") {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-gray-900 to-gray-950">
+        <div className="text-white">Loading...</div>
+      </div>
+    );
+  }
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    console.log(isLogin ? "Signing in..." : "Signing up...");
-    // Add your auth logic here
+    setLoading(true);
+    setError("");
+
+    if (isLogin) {
+      // Login logic
+      try {
+        const result = await signIn("credentials", {
+          redirect: false,
+          email,
+          password,
+        });
+
+        if (result?.error) {
+          setError(result.error);
+        } else {
+          router.push("/editor");
+        }
+      } catch (err) {
+        setError("Failed to sign in. Please try again.");
+      }
+    } else {
+      // Signup logic
+      try {
+        const response = await fetch("/api/auth/signup", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            email,
+            password,
+          }),
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.error || "Signup failed");
+        }
+
+        // Automatically sign in after successful signup
+        const signInResult = await signIn("credentials", {
+          redirect: false,
+          email,
+          password,
+        });
+
+        if (signInResult?.error) {
+          setError(signInResult.error);
+        } else {
+          router.push("/editor");
+        }
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Failed to create account");
+      }
+    }
+    setLoading(false);
   };
 
   const handleGitHubAuth = () => {
-    signIn("github", { callbackUrl: "/" });
+    signIn("github", {
+      callbackUrl: "/editor",
+      authorization: {
+        params: {
+          scope: "read:user user:email repo",
+          prompt: "consent",
+        },
+      },
+    });
   };
 
   return (
@@ -35,7 +117,10 @@ export default function AuthPage() {
           {/* Auth Toggle */}
           <div className="flex border-b border-gray-800">
             <button
-              onClick={() => setIsLogin(true)}
+              onClick={() => {
+                setIsLogin(true);
+                setError("");
+              }}
               className={`flex-1 py-4 font-medium text-center transition-colors ${
                 isLogin
                   ? "text-cyan-400 bg-gray-800/50"
@@ -45,7 +130,10 @@ export default function AuthPage() {
               Sign In
             </button>
             <button
-              onClick={() => setIsLogin(false)}
+              onClick={() => {
+                setIsLogin(false);
+                setError("");
+              }}
               className={`flex-1 py-4 font-medium text-center transition-colors ${
                 !isLogin
                   ? "text-cyan-400 bg-gray-800/50"
@@ -57,6 +145,12 @@ export default function AuthPage() {
           </div>
 
           <div className="p-8">
+            {error && (
+              <div className="mb-4 bg-red-100 text-red-700 p-3 rounded-md">
+                {error}
+              </div>
+            )}
+            
             {/* GitHub Auth */}
             <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
               <Button
@@ -81,20 +175,6 @@ export default function AuthPage() {
             <form onSubmit={handleSubmit} className="space-y-5">
               {!isLogin && (
                 <div>
-                  <label className="block text-sm font-medium text-gray-400 mb-1">
-                    Name
-                  </label>
-                  <div className="relative">
-                    <FiUser className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500" />
-                    <Input
-                      type="text"
-                      placeholder="Your name"
-                      value={name}
-                      onChange={(e) => setName(e.target.value)}
-                      className="w-full pl-10 pr-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400/30 transition-all"
-                      required
-                    />
-                  </div>
                 </div>
               )}
 
@@ -134,20 +214,6 @@ export default function AuthPage() {
 
               {!isLogin && (
                 <div>
-                  <label className="block text-sm font-medium text-gray-400 mb-1">
-                    Security Question
-                  </label>
-                  <div className="relative">
-                    <FiGlobe className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500" />
-                    <Input
-                      type="text"
-                      placeholder="Your favorite country"
-                      value={secretQ}
-                      onChange={(e) => setSecretQ(e.target.value)}
-                      className="w-full pl-10 pr-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400/30 transition-all"
-                      required
-                    />
-                  </div>
                 </div>
               )}
 
@@ -158,8 +224,11 @@ export default function AuthPage() {
                 <Button
                   type="submit"
                   className="w-full py-3 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 text-white font-medium rounded-lg shadow-lg transition-all"
+                  disabled={loading}
                 >
-                  {isLogin ? "Sign In" : "Create Account"}
+                  {loading 
+                    ? (isLogin ? "Signing in..." : "Creating account...") 
+                    : (isLogin ? "Sign In" : "Create Account")}
                 </Button>
               </motion.div>
             </form>

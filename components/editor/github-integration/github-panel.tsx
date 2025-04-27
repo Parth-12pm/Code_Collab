@@ -136,7 +136,7 @@ export default function GitHubPanel({ sessionId, files = [] }: GitHubPanelProps)
       console.error("Error creating repository:", error)
       toast({
         title: "Error",
-        description: error.message || "Failed to create GitHub repository",
+        description: (error as Error).message || "Failed to create GitHub repository",
         variant: "destructive",
       })
     } finally {
@@ -209,7 +209,7 @@ export default function GitHubPanel({ sessionId, files = [] }: GitHubPanelProps)
       console.error("Error committing changes:", error)
       toast({
         title: "Error",
-        description: error.message || "Failed to commit changes",
+        description: (error as Error).message || "Failed to commit changes",
         variant: "destructive",
       })
     } finally {
