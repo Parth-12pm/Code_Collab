@@ -702,7 +702,6 @@ export function CodeExecution() {
         <TabsContent value="terminal" className="flex-1 p-0 m-0">
           <div ref={terminalRef} className="h-full w-full" />
         </TabsContent>
-
         <TabsContent value="preview" className="flex-1 p-0 m-0 relative">
           {previewHtml ? (
             <>
