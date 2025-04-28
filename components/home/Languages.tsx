@@ -1,28 +1,93 @@
 "use client";
-import { FaHtml5, FaCss3Alt, FaJs, FaReact, FaNodeJs } from "react-icons/fa";
-import { SiTypescript, SiJson, SiMarkdown, SiNextdotjs } from "react-icons/si";
-import { LuFileText } from "react-icons/lu";
 import { motion } from "framer-motion";
+import { Card, CardContent } from "@/components/ui/card";
+import {
+  SiTypescript,
+  SiNextdotjs,
+  SiJavascript,
+  SiHtml5,
+  SiCss3,
+  SiReact,
+  SiNodedotjs,
+  SiJson,
+  SiMarkdown,
+} from "react-icons/si";
+import { FaPlus } from "react-icons/fa6";
+import { FileText } from "lucide-react";
 
 const languages = [
-  { name: "Next.js", icon: <SiNextdotjs />, extension: "", color: "text-black" },
-  { name: "TypeScript", icon: <SiTypescript />, extension: ".ts", color: "text-blue-600" },
-  { name: "React TSX", icon: <FaReact />, extension: ".tsx", color: "text-blue-400" },
-  { name: "JSON", icon: <SiJson />, extension: ".json", color: "text-gray-500" },
-  { name: "JavaScript", icon: <FaJs />, extension: ".js", color: "text-yellow-400" },
-  { name: "HTML", icon: <FaHtml5 />, extension: ".html", color: "text-orange-500" },
-  { name: "React JSX", icon: <FaReact />, extension: ".jsx", color: "text-blue-400" },
-  { name: "Text", icon: <LuFileText />, extension: ".txt", color: "text-gray-600" },
-  { name: "Node.js", icon: <FaNodeJs />, extension: ".js", color: "text-green-500" },
-  { name: "CSS", icon: <FaCss3Alt />, extension: ".css", color: "text-blue-500" },
-  { name: "Markdown", icon: <SiMarkdown />, extension: ".md", color: "text-gray-700" },
-  { name: "And Many More", icon: "✨", extension: "", color: "text-purple-400" },
+  {
+    name: "TypeScript",
+    icon: <SiTypescript className="h-12 w-12" />,
+    extension: ".ts",
+    color: "text-blue-600",
+  },
+  {
+    name: "React",
+    icon: <SiReact className="h-12 w-12" />,
+    extension: ".tsx",
+    color: "text-blue-400",
+  },
+  {
+    name: "JSON",
+    icon: <SiJson className="h-12 w-12" />,
+    extension: ".json",
+    color: "text-gray-500",
+  },
+  {
+    name: "JavaScript",
+    icon: <SiJavascript className="h-12 w-12" />,
+    extension: ".js",
+    color: "text-yellow-400",
+  },
+  {
+    name: "HTML",
+    icon: <SiHtml5 className="h-12 w-12" />,
+    extension: ".html",
+    color: "text-orange-500",
+  },
+  {
+    name: "Node.js",
+    icon: <SiNodedotjs className="h-12 w-12" />,
+    extension: ".js",
+    color: "text-green-500",
+  },
+  {
+    name: "CSS",
+    icon: <SiCss3 className="h-12 w-12" />,
+    extension: ".css",
+    color: "text-blue-500",
+  },
+  {
+    name: "Markdown",
+    icon: <SiMarkdown className="h-12 w-12" />,
+    extension: ".md",
+    color: "text-gray-700",
+  },
+  {
+    name: "Text",
+    icon: <FileText className="h-12 w-12" />,
+    extension: ".txt",
+    color: "text-gray-600",
+  },
+  {
+    name: "JSX",
+    icon: <SiReact className="h-12 w-12" />,
+    extension: ".jsx",
+    color: "text-blue-400",
+  },
+  {
+    name: "And More",
+    icon: <FaPlus />,
+    extension: "",
+    color: "text-purple-400",
+  },
 ];
 
 export default function Languages() {
   return (
-    <section id="languages" className="py-10 bg-gradient-to-b from-gray-900 to-gray-850">
-      <div className="max-w-7xl mx-auto px-6">
+    <section id="languages" className="py-20">
+      <div className="container">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
@@ -30,11 +95,12 @@ export default function Languages() {
           viewport={{ once: true }}
           className="text-center mb-16"
         >
-          <h2 className="text-5xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-cyan-400 to-blue-500 mb-4">
-          Enhance Your Workflow
+          <h2 className="text-4xl md:text-5xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-primary to-indigo-500 mb-4">
+            Enhance Your Workflow
           </h2>
-          <p className="text-xl text-gray-300 max-w-3xl mx-auto">
-            Work with all your favorite languages and frameworks in real-time collaboration
+          <p className="text-xl text-muted-foreground max-w-3xl mx-auto">
+            Work with all your favorite languages and frameworks in real-time
+            collaboration
           </p>
         </motion.div>
 
@@ -46,25 +112,24 @@ export default function Languages() {
               whileInView={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.3, delay: index * 0.05 }}
               viewport={{ once: true, margin: "-50px" }}
-              whileHover={{ 
+              whileHover={{
                 y: -5,
                 scale: 1.05,
-                backgroundColor: "rgba(255, 255, 255, 0.05)",
-                boxShadow: "0 10px 25px -5px rgba(59, 130, 246, 0.2)"
               }}
-              className={`p-6 flex flex-col items-center justify-center rounded-xl backdrop-blur-sm bg-white/5 border border-gray-700/50 hover:border-cyan-400/30 transition-all duration-300 cursor-default`}
             >
-              <div className={`text-5xl mb-3 ${lang.color} drop-shadow-lg`}>
-                {lang.icon}
-              </div>
-              <h3 className="text-lg font-medium text-white">
-                {lang.name}
-              </h3>
-              {lang.extension && (
-                <span className="text-sm text-gray-400 mt-1">
-                  {lang.extension}
-                </span>
-              )}
+              <Card className="h-full border-muted-foreground/10 bg-card/50 backdrop-blur-sm hover:border-primary/30 transition-all duration-300">
+                <CardContent className="flex flex-col items-center justify-center p-6">
+                  <div className={`mb-3 ${lang.color} drop-shadow-lg`}>
+                    {lang.icon}
+                  </div>
+                  <h3 className="text-lg font-medium">{lang.name}</h3>
+                  {lang.extension && (
+                    <span className="text-sm text-muted-foreground mt-1">
+                      {lang.extension}
+                    </span>
+                  )}
+                </CardContent>
+              </Card>
             </motion.div>
           ))}
         </div>
@@ -76,8 +141,9 @@ export default function Languages() {
           viewport={{ once: true }}
           className="text-center mt-16"
         >
-          <p className="text-gray-400">
-            Plus many more languages and frameworks supported through our extensible system
+          <p className="text-muted-foreground">
+            Plus many more languages and frameworks supported through our
+            extensible system
           </p>
         </motion.div>
       </div>

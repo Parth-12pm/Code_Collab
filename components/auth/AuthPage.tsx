@@ -1,58 +1,63 @@
-"use client";
-import { useState, useEffect } from "react";
-import { signIn, useSession } from "next-auth/react";
-import { motion } from "framer-motion";
-import { FiGithub, FiMail, FiLock, FiUser, FiGlobe } from "react-icons/fi";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { useRouter } from "next/navigation";
+"use client"
+import { useState, useEffect } from "react"
+import type React from "react"
+
+import { signIn, useSession } from "next-auth/react"
+import { motion } from "framer-motion"
+import { Github, Mail, Lock } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { useRouter } from "next/navigation"
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Alert, AlertDescription } from "@/components/ui/alert"
 
 export default function AuthPage() {
-  const { data: session, status } = useSession();
-  const router = useRouter();
-  const [isLogin, setIsLogin] = useState(true);
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [name, setName] = useState("");
-  const [secretQ, setSecretQ] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
+  const { data: session, status } = useSession()
+  const router = useRouter()
+  const [activeTab, setActiveTab] = useState("login")
+  const [email, setEmail] = useState("")
+  const [password, setPassword] = useState("")
+  const [name, setName] = useState("")
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState("")
 
   useEffect(() => {
     if (status === "authenticated") {
-      router.push("/editor");
+      router.push("/editor")
     }
-  }, [status, router]);
+  }, [status, router])
 
   if (status === "loading") {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-gray-900 to-gray-950">
-        <div className="text-white">Loading...</div>
+      <div className="flex min-h-screen items-center justify-center">
+        <div className="text-muted-foreground">Loading...</div>
       </div>
-    );
+    )
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    setError("");
+    e.preventDefault()
+    setLoading(true)
+    setError("")
 
-    if (isLogin) {
+    if (activeTab === "login") {
       // Login logic
       try {
         const result = await signIn("credentials", {
           redirect: false,
           email,
           password,
-        });
+        })
 
         if (result?.error) {
-          setError(result.error);
+          setError(result.error)
         } else {
-          router.push("/editor");
+          router.push("/editor")
         }
       } catch (err) {
-        setError("Failed to sign in. Please try again.");
+        setError("Failed to sign in. Please try again.")
       }
     } else {
       // Signup logic
@@ -66,12 +71,12 @@ export default function AuthPage() {
             email,
             password,
           }),
-        });
+        })
 
-        const data = await response.json();
+        const data = await response.json()
 
         if (!response.ok) {
-          throw new Error(data.error || "Signup failed");
+          throw new Error(data.error || "Signup failed")
         }
 
         // Automatically sign in after successful signup
@@ -79,19 +84,19 @@ export default function AuthPage() {
           redirect: false,
           email,
           password,
-        });
+        })
 
         if (signInResult?.error) {
-          setError(signInResult.error);
+          setError(signInResult.error)
         } else {
-          router.push("/editor");
+          router.push("/editor")
         }
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to create account");
+        setError(err instanceof Error ? err.message : "Failed to create account")
       }
     }
-    setLoading(false);
-  };
+    setLoading(false)
+  }
 
   const handleGitHubAuth = () => {
     signIn("github", {
@@ -102,149 +107,120 @@ export default function AuthPage() {
           prompt: "consent",
         },
       },
-    });
-  };
+    })
+  }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-gray-900 to-gray-950 p-4">
+    <div className="flex min-h-screen items-center justify-center p-4 bg-muted/30">
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.6 }}
         className="w-full max-w-md"
       >
-        <div className="rounded-2xl bg-gray-900/80 backdrop-blur-lg border border-gray-800 shadow-xl overflow-hidden">
-          {/* Auth Toggle */}
-          <div className="flex border-b border-gray-800">
-            <button
-              onClick={() => {
-                setIsLogin(true);
-                setError("");
-              }}
-              className={`flex-1 py-4 font-medium text-center transition-colors ${
-                isLogin
-                  ? "text-cyan-400 bg-gray-800/50"
-                  : "text-gray-400 hover:text-gray-300"
-              }`}
-            >
-              Sign In
-            </button>
-            <button
-              onClick={() => {
-                setIsLogin(false);
-                setError("");
-              }}
-              className={`flex-1 py-4 font-medium text-center transition-colors ${
-                !isLogin
-                  ? "text-cyan-400 bg-gray-800/50"
-                  : "text-gray-400 hover:text-gray-300"
-              }`}
-            >
-              Sign Up
-            </button>
-          </div>
+        <Card className="border-muted-foreground/20">
+          <Tabs value={activeTab} onValueChange={setActiveTab}>
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="login">Sign In</TabsTrigger>
+              <TabsTrigger value="register">Sign Up</TabsTrigger>
+            </TabsList>
 
-          <div className="p-8">
-            {error && (
-              <div className="mb-4 bg-red-100 text-red-700 p-3 rounded-md">
-                {error}
-              </div>
-            )}
-            
-            {/* GitHub Auth */}
-            <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
-              <Button
-                onClick={handleGitHubAuth}
-                className="w-full flex items-center justify-center gap-3 bg-gray-800 hover:bg-gray-700 text-white py-3 rounded-lg transition-all"
-              >
-                <FiGithub className="text-xl" />
-                <span>Continue with GitHub</span>
-              </Button>
-            </motion.div>
+            <CardHeader>
+              <CardTitle className="text-2xl text-center">
+                {activeTab === "login" ? "Welcome back" : "Create an account"}
+              </CardTitle>
+              <CardDescription className="text-center">
+                {activeTab === "login"
+                  ? "Enter your credentials to sign in to your account"
+                  : "Enter your information to create an account"}
+              </CardDescription>
+            </CardHeader>
 
-            <div className="relative my-6">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-gray-800"></div>
-              </div>
-              <div className="relative flex justify-center text-sm">
-                <span className="px-2 bg-gray-900/80 text-gray-500">OR</span>
-              </div>
-            </div>
-
-            {/* Auth Form */}
-            <form onSubmit={handleSubmit} className="space-y-5">
-              {!isLogin && (
-                <div>
-                </div>
+            <CardContent>
+              {error && (
+                <Alert variant="destructive" className="mb-4">
+                  <AlertDescription>{error}</AlertDescription>
+                </Alert>
               )}
 
-              <div>
-                <label className="block text-sm font-medium text-gray-400 mb-1">
-                  Email
-                </label>
-                <div className="relative">
-                  <FiMail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500" />
-                  <Input
-                    type="email"
-                    placeholder="you@example.com"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className="w-full pl-10 pr-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400/30 transition-all"
-                    required
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-400 mb-1">
-                  Password
-                </label>
-                <div className="relative">
-                  <FiLock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500" />
-                  <Input
-                    type="password"
-                    placeholder="••••••••"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className="w-full pl-10 pr-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400/30 transition-all"
-                    required
-                  />
-                </div>
-              </div>
-
-              {!isLogin && (
-                <div>
-                </div>
-              )}
-
-              <motion.div
-                whileHover={{ scale: 1.01 }}
-                whileTap={{ scale: 0.99 }}
-              >
-                <Button
-                  type="submit"
-                  className="w-full py-3 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 text-white font-medium rounded-lg shadow-lg transition-all"
-                  disabled={loading}
-                >
-                  {loading 
-                    ? (isLogin ? "Signing in..." : "Creating account...") 
-                    : (isLogin ? "Sign In" : "Create Account")}
+              <div className="space-y-4">
+                {/* GitHub Auth */}
+                <Button variant="outline" onClick={handleGitHubAuth} className="w-full gap-2">
+                  <Github className="h-4 w-4" />
+                  Continue with GitHub
                 </Button>
-              </motion.div>
-            </form>
 
-            <p className="mt-6 text-center text-sm text-gray-500">
-              {isLogin ? "Don't have an account?" : "Already have an account?"}{" "}
-              <button
-                onClick={() => setIsLogin(!isLogin)}
-                className="text-cyan-400 hover:underline font-medium"
-              >
-                {isLogin ? "Sign up" : "Sign in"}
-              </button>
-            </p>
-          </div>
-        </div>
+                <div className="relative my-6">
+                  <div className="absolute inset-0 flex items-center">
+                    <div className="w-full border-t"></div>
+                  </div>
+                  <div className="relative flex justify-center text-sm">
+                    <span className="px-2 bg-card text-muted-foreground">OR</span>
+                  </div>
+                </div>
+
+                {/* Auth Form */}
+                <form onSubmit={handleSubmit} className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="email">Email</Label>
+                    <div className="relative">
+                      <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        id="email"
+                        type="email"
+                        placeholder="you@example.com"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        className="pl-10"
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="password">Password</Label>
+                    <div className="relative">
+                      <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        id="password"
+                        type="password"
+                        placeholder="••••••••"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        className="pl-10"
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <Button type="submit" className="w-full" disabled={loading}>
+                    {loading
+                      ? activeTab === "login"
+                        ? "Signing in..."
+                        : "Creating account..."
+                      : activeTab === "login"
+                        ? "Sign In"
+                        : "Create Account"}
+                  </Button>
+                </form>
+              </div>
+            </CardContent>
+
+            <CardFooter className="flex flex-col">
+              <p className="text-center text-sm text-muted-foreground mt-4">
+                {activeTab === "login" ? "Don't have an account? " : "Already have an account? "}
+                <Button
+                  variant="link"
+                  className="p-0 h-auto font-normal"
+                  onClick={() => setActiveTab(activeTab === "login" ? "register" : "login")}
+                >
+                  {activeTab === "login" ? "Sign up" : "Sign in"}
+                </Button>
+              </p>
+            </CardFooter>
+          </Tabs>
+        </Card>
       </motion.div>
     </div>
-  );
+  )
 }
