@@ -20,7 +20,7 @@ import { LiveMap } from "@liveblocks/client";
 import {
   type Language,
   LanguageSelector,
-  languages,
+  getLanguageForExtension,
 } from "./language-selector";
 import { SandpackPreview } from "./sandpack-preview";
 import { NonWebPreview } from "./non-web-preview";
@@ -34,7 +34,6 @@ import type { ExecutionResult } from "@/liveblocks.config";
 // Import types only, not the actual implementation
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
-import { WebLinksAddon } from "@xterm/addon-web-links";
 import { IDisposable } from "xterm";
 
 interface XTermType extends Terminal {
@@ -60,7 +59,6 @@ export function CodeExecution() {
   const [fitAddon, setFitAddon] = useState<FitAddon | null>(null);
   const [previewHtml, setPreviewHtml] = useState<string>("");
   const [isRunning, setIsRunning] = useState(false);
-  const [output, setOutput] = useState<string>("");
 
   const terminalRef = useRef<HTMLDivElement>(null);
   const previewRef = useRef<HTMLIFrameElement>(null);
@@ -69,7 +67,6 @@ export function CodeExecution() {
   const files = useStorage((root) => root.files);
   const [myPresence] = useMyPresence();
   const self = useSelf();
-  const executionResults = useStorage((root) => root.executionResults);
 
   // Check if we're on the client side
   useEffect(() => {
@@ -78,8 +75,22 @@ export function CodeExecution() {
 
   // Get the current file content
   const currentFile = myPresence.currentFile;
-  const currentFileContent =
-    currentFile && files ? files.get(currentFile)?.content || "" : "";
+
+  const getLatestCurrentFileContent = () => {
+    if (!currentFile) {
+      return "";
+    }
+
+    if (
+      typeof window !== "undefined" &&
+      window.codeCollabEditor &&
+      window.codeCollabCurrentFile === currentFile
+    ) {
+      return window.codeCollabEditor.getValue();
+    }
+
+    return files?.get(currentFile)?.content || "";
+  };
 
   // Create a mutation to update the execution results
   const updateExecutionResults = useMutation(({ storage }, results) => {
@@ -120,11 +131,20 @@ export function CodeExecution() {
     
     for (const [key, file] of Array.from(files.entries())) {
       if (file && file.content) {
-        const fileObj = file as any;
+        const fileObj = file as {
+          content: string;
+          path?: string;
+          name?: string;
+        };
         const path = fileObj.path || fileObj.name || key;
         workspaceFiles[path] = file.content;
       }
     }
+
+    if (currentFile) {
+      workspaceFiles[currentFile] = getLatestCurrentFileContent();
+    }
+
     return workspaceFiles;
   };
 
@@ -135,7 +155,9 @@ export function CodeExecution() {
 
   // Execute the code
   const executeCode = async () => {
-    if (!language || !currentFile || !currentFileContent) return;
+    const latestContent = getLatestCurrentFileContent();
+
+    if (!language || !currentFile || !latestContent) return;
 
     setIsExecuting(true);
     const newExecutionId = nanoid();
@@ -148,7 +170,7 @@ export function CodeExecution() {
         updateExecutionResults({
           id: newExecutionId,
           language: language.id,
-          code: currentFileContent,
+          code: latestContent,
           type: "web",
           status: "success",
           timestamp: Date.now(),
@@ -162,7 +184,7 @@ export function CodeExecution() {
           },
           body: JSON.stringify({
             language: language.id,
-            code: currentFileContent,
+            code: latestContent,
           }),
         });
 
@@ -176,7 +198,7 @@ export function CodeExecution() {
         updateExecutionResults({
           id: newExecutionId,
           language: language.id,
-          code: currentFileContent,
+          code: latestContent,
           type: "non-web",
           status: "success",
           result: result,
@@ -190,7 +212,7 @@ export function CodeExecution() {
       updateExecutionResults({
         id: newExecutionId,
         language: language.id,
-        code: currentFileContent,
+        code: latestContent,
         type: language.type,
         status: "error",
         error: (error as Error).message,
@@ -205,14 +227,10 @@ export function CodeExecution() {
   useEffect(() => {
     if (currentFile) {
       const extension = currentFile.split(".").pop();
-      if (extension) {
-        const detectedLanguage = languages.find(
-          (lang) => lang.extension === extension
-        );
-        if (detectedLanguage) {
-          setLanguage(detectedLanguage);
-        }
-      }
+      const detectedLanguage = getLanguageForExtension(extension);
+      setLanguage(detectedLanguage);
+    } else {
+      setLanguage(undefined);
     }
   }, [currentFile]);
 
@@ -282,7 +300,7 @@ export function CodeExecution() {
         // Set up command handling
         let commandBuffer = "";
 
-        const disposable = term.onKey(({ key, domEvent }) => {
+        term.onKey(({ key, domEvent }) => {
           const printable =
             !domEvent.altKey && !domEvent.ctrlKey && !domEvent.metaKey;
 
@@ -308,9 +326,6 @@ export function CodeExecution() {
         });
 
         term.write("$ ");
-
-        // Store the disposable in term for cleanup
-        (term as any)._disposable = disposable;
 
         setTerminal(term as XTermType);
         setFitAddon(fit);
@@ -380,7 +395,7 @@ export function CodeExecution() {
     if (!currentFile) return null;
 
     return {
-      content: currentFile.content,
+      content: getLatestCurrentFileContent(),
       type: currentFile.type,
       name: currentFile.name,
     };
@@ -405,9 +420,6 @@ export function CodeExecution() {
       let result = "";
       let error: string | undefined = undefined;
       let isWeb = false;
-
-      // Clear previous output
-      setOutput("");
 
       const webTypes = ["html", "css", "jsx", "tsx", "vue", "svelte"];
 
@@ -466,9 +478,6 @@ export function CodeExecution() {
           // Restore console functions
           console.log = originalConsoleLog;
           console.error = originalConsoleError;
-
-          // Set output
-          setOutput(result);
 
           // Log to terminal
           if (error) {
@@ -678,6 +687,7 @@ export function CodeExecution() {
           <LanguageSelector
             onLanguageChange={handleLanguageChange}
             currentLanguage={language}
+            autoSelectDefault={false}
           />
           <Button
             onClick={executeCode}
@@ -728,6 +738,7 @@ export function CodeExecution() {
                         language={executionResult.language}
                         code={executionResult.code}
                         workspaceFiles={getWorkspaceFiles()}
+                        activeFilePath={currentFile || undefined}
                       />
                     ) : (
                       <NonWebPreview result={executionResult.result} />

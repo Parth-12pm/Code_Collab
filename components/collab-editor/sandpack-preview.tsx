@@ -7,19 +7,80 @@ import {
   SandpackConsole,
   SandpackLayout,
 } from "@codesandbox/sandpack-react"
-import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable"
 
 interface SandpackPreviewProps {
   language: string
   code: string
   workspaceFiles?: Record<string, string>
+  activeFilePath?: string
 }
 
-export function SandpackPreview({ language, code, workspaceFiles }: SandpackPreviewProps) {
+const DEFAULT_STATIC_HTML = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Preview</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <main id="app" class="preview-shell">
+    <h1>Live Preview</h1>
+    <p>Update your HTML or CSS file to see changes here.</p>
+    <button class="preview-button">Interactive Button</button>
+  </main>
+  <script src="/index.js"></script>
+</body>
+</html>`
+
+const DEFAULT_STATIC_CSS = `body {
+  font-family: sans-serif;
+  margin: 0;
+  padding: 24px;
+  background: #111827;
+  color: #f9fafb;
+}
+
+.preview-shell {
+  max-width: 720px;
+}
+
+.preview-button {
+  border: 0;
+  border-radius: 999px;
+  padding: 10px 16px;
+  background: #22c55e;
+  color: #052e16;
+  font-weight: 700;
+}`
+
+const DEFAULT_STATIC_JS = `document.getElementById("app")?.insertAdjacentHTML(
+  "beforeend",
+  "<p>JavaScript preview is ready.</p>"
+)`
+
+export function SandpackPreview({
+  language,
+  code,
+  workspaceFiles,
+  activeFilePath,
+}: SandpackPreviewProps) {
   const [files, setFiles] = useState<Record<string, { code: string }>>({})
   const [isHtmlOnly, setIsHtmlOnly] = useState(false)
+  const normalizedActiveFilePath = activeFilePath
+    ? activeFilePath.startsWith("/") ? activeFilePath : `/${activeFilePath}`
+    : ""
+  const activeExtension = normalizedActiveFilePath.split(".").pop()?.toLowerCase()
+  const isCssFile = activeExtension === "css"
+  const isReactTypescriptFile = language === "react" && activeExtension === "tsx"
 
   useEffect(() => {
+    const normalizedWorkspaceFiles = Object.fromEntries(
+      Object.entries(workspaceFiles || {}).map(([path, fileCode]) => [
+        path.startsWith("/") ? path : `/${path}`,
+        fileCode,
+      ])
+    )
+
     // Check if the code is pure HTML
     const isPureHtml =
       code.trim().startsWith("<!DOCTYPE html>") ||
@@ -30,31 +91,64 @@ export function SandpackPreview({ language, code, workspaceFiles }: SandpackPrev
 
     // Set up the files based on the language and code content
     if (language === "html" || isPureHtml) {
-      // For HTML, just use the code directly
-      setFiles({
+      const staticFiles: Record<string, { code: string }> = {
         "/index.html": {
-          code: code,
+          code: isCssFile
+            ? normalizedWorkspaceFiles["/index.html"] || DEFAULT_STATIC_HTML
+            : code || normalizedWorkspaceFiles["/index.html"] || DEFAULT_STATIC_HTML,
         },
-      })
-    } else if (language === "react") {
-      // React setup code remains the same
-      setFiles({
-        "/App.js": {
-          code,
+        "/styles.css": {
+          code: isCssFile
+            ? code
+            : normalizedWorkspaceFiles["/styles.css"] || DEFAULT_STATIC_CSS,
         },
         "/index.js": {
-          code: `
+          code: normalizedWorkspaceFiles["/index.js"] || DEFAULT_STATIC_JS,
+        },
+      }
+
+      Object.entries(normalizedWorkspaceFiles).forEach(([path, fileCode]) => {
+        staticFiles[path] = { code: fileCode }
+      })
+
+      if (isCssFile) {
+        staticFiles["/styles.css"] = { code }
+      } else {
+        staticFiles["/index.html"] = { code }
+      }
+
+      setFiles(staticFiles)
+    } else if (language === "react") {
+      const appPath = isReactTypescriptFile ? "/App.tsx" : "/App.js"
+      const entryPath = isReactTypescriptFile ? "/index.tsx" : "/index.js"
+      const reactFiles: Record<string, { code: string }> = {
+        [appPath]: {
+          code,
+        },
+        [entryPath]: {
+          code: isReactTypescriptFile
+            ? `
 import React from "react";
-import ReactDOM from "react-dom";
+import ReactDOM from "react-dom/client";
 import App from "./App";
 
-ReactDOM.render(
+ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>
     <App />
-  </React.StrictMode>,
-  document.getElementById("root")
+  </React.StrictMode>
 );
-          `,
+            `
+            : `
+import React from "react";
+import ReactDOM from "react-dom/client";
+import App from "./App";
+
+ReactDOM.createRoot(document.getElementById("root")).render(
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>
+);
+            `,
         },
         "/index.html": {
           code: `
@@ -70,10 +164,17 @@ ReactDOM.render(
 </html>
           `,
         },
+      }
+
+      Object.entries(normalizedWorkspaceFiles).forEach(([path, fileCode]) => {
+        reactFiles[path] = { code: fileCode }
       })
+
+      reactFiles[appPath] = { code }
+      setFiles(reactFiles)
     } else if (language === "vue") {
       // Vue setup code remains the same
-      setFiles({
+      const vueFiles: Record<string, { code: string }> = {
         "/App.vue": {
           code,
         },
@@ -99,10 +200,17 @@ createApp(App).mount("#app");
 </html>
           `,
         },
+      }
+
+      Object.entries(normalizedWorkspaceFiles).forEach(([path, fileCode]) => {
+        vueFiles[path] = { code: fileCode }
       })
+
+      vueFiles["/App.vue"] = { code }
+      setFiles(vueFiles)
     } else if (language === "svelte") {
       // Svelte setup code remains the same
-      setFiles({
+      const svelteFiles: Record<string, { code: string }> = {
         "/App.svelte": {
           code,
         },
@@ -130,7 +238,14 @@ export default app;
 </html>
           `,
         },
+      }
+
+      Object.entries(normalizedWorkspaceFiles).forEach(([path, fileCode]) => {
+        svelteFiles[path] = { code: fileCode }
       })
+
+      svelteFiles["/App.svelte"] = { code }
+      setFiles(svelteFiles)
     } else {
       // Default to vanilla JavaScript with app div
       const jsFiles: Record<string, { code: string }> = {
@@ -178,17 +293,23 @@ document.getElementById("app").innerHTML = \`
 
       // Finally, if workspaceFiles are provided, layer them on top dynamically
       // so users have access to all their custom files across all templates.
-      if (workspaceFiles && Object.keys(workspaceFiles).length > 0) {
-        const overlayFiles = { ...jsFiles }; // Or whatever base files we matched
-
+      if (Object.keys(normalizedWorkspaceFiles).length > 0) {
         // Special handling depending on language base
         let baseFiles = jsFiles;
         if (language === 'html' || isPureHtml) {
-          baseFiles = { "/index.html": { code } };
+          baseFiles = {
+            "/index.html": { code: DEFAULT_STATIC_HTML },
+            "/styles.css": { code: DEFAULT_STATIC_CSS },
+            "/index.js": { code: DEFAULT_STATIC_JS },
+          };
         } else if (language === 'react') {
             baseFiles = {
-              "/App.js": { code },
-              "/index.js": { code: `import React from "react";\nimport ReactDOM from "react-dom";\nimport App from "./App";\nReactDOM.render(<React.StrictMode><App /></React.StrictMode>, document.getElementById("root"));` },
+              [isReactTypescriptFile ? "/App.tsx" : "/App.js"]: { code },
+              [isReactTypescriptFile ? "/index.tsx" : "/index.js"]: {
+                code: isReactTypescriptFile
+                  ? `import React from "react";\nimport ReactDOM from "react-dom/client";\nimport App from "./App";\nReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(<React.StrictMode><App /></React.StrictMode>);`
+                  : `import React from "react";\nimport ReactDOM from "react-dom/client";\nimport App from "./App";\nReactDOM.createRoot(document.getElementById("root")).render(<React.StrictMode><App /></React.StrictMode>);`,
+              },
               "/index.html": { code: `<!DOCTYPE html><html><head><meta charset="utf-8"><title>React Preview</title></head><body><div id="root"></div></body></html>` }
             };
         } else if (language === 'vue') {
@@ -206,21 +327,19 @@ document.getElementById("app").innerHTML = \`
         }
 
         // Apply all workspace files over top
-        Object.entries(workspaceFiles).forEach(([path, fileCode]) => {
-          // Normalize path for Sandpack
-          const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+        Object.entries(normalizedWorkspaceFiles).forEach(([normalizedPath, fileCode]) => {
           baseFiles[normalizedPath] = { code: fileCode };
         });
 
         // Ensure the active code is the entry/main view
         if (language === 'react') {
-            baseFiles['/App.js'] = { code };
+            baseFiles[isReactTypescriptFile ? '/App.tsx' : '/App.js'] = { code };
         } else if (language === 'vue') {
             baseFiles['/App.vue'] = { code };
         } else if (language === 'svelte') {
             baseFiles['/App.svelte'] = { code };
         } else if (language === 'html' || isPureHtml) {
-            baseFiles['/index.html'] = { code };
+            baseFiles[isCssFile ? '/styles.css' : '/index.html'] = { code };
         }
 
         setFiles(baseFiles);
@@ -229,17 +348,24 @@ document.getElementById("app").innerHTML = \`
       }
 
     }
-  }, [language, code, workspaceFiles])
+  }, [
+    activeFilePath,
+    code,
+    isCssFile,
+    isReactTypescriptFile,
+    language,
+    workspaceFiles,
+  ])
 
   // Get the template based on the language
   const getTemplate = () => {
-    if (isHtmlOnly) {
+    if (isHtmlOnly || language === "html") {
       return "static" // Use static template for pure HTML
     }
 
     switch (language) {
       case "react":
-        return "react"
+        return isReactTypescriptFile ? "react-ts" : "react"
       case "vue":
         return "vue"
       case "svelte":
@@ -256,8 +382,7 @@ document.getElementById("app").innerHTML = \`
         files={files}
         theme="dark"
         options={{
-          recompileMode: "delayed",
-          recompileDelay: 500,
+          recompileMode: "immediate",
         }}
       >
         <SandpackLayout className="h-full flex-1 !p-0 !m-0">

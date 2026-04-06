@@ -53,7 +53,7 @@ export type ExecutionResult = {
   code: string;
   type: "web" | "non-web";
   status: "success" | "error";
-  result?: any;
+  result?: unknown;
   error?: string;
   timestamp: number;
 };
@@ -86,7 +86,11 @@ export type Storage = {
 // Add monaco to window type
 declare global {
   interface Window {
-    monaco: any;
+    monaco: typeof import("monaco-editor") | null;
+    codeCollabEditor?: {
+      getValue: () => string;
+    } | null;
+    codeCollabCurrentFile?: string | null;
   }
 }
 

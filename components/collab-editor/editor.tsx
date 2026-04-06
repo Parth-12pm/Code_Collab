@@ -2,7 +2,6 @@
 
 import { useEffect, useRef, useState } from "react";
 import {
-  useRoom,
   useMyPresence,
   useOthers,
   useStorage,
@@ -12,7 +11,7 @@ import {
 import { useMutation } from "@liveblocks/react";
 import type { editor } from "monaco-editor";
 import dynamic from "next/dynamic";
-import { LiveList, LiveMap } from "@liveblocks/client";
+import { LiveList } from "@liveblocks/client";
 
 // Dynamically import monaco editor
 const MonacoEditor = dynamic(() => import("@monaco-editor/react"), {
@@ -27,8 +26,10 @@ interface EditorProps {
 
 export default function Editor({ theme }: EditorProps) {
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
+  const isApplyingExternalUpdateRef = useRef(false);
+  const modifyTimelineTimeoutRef =
+    useRef<ReturnType<typeof setTimeout> | null>(null);
   const [editorReady, setEditorReady] = useState(false);
-  const room = useRoom();
   const [myPresence, updateMyPresence] = useMyPresence();
   const others = useOthers();
   const self = useSelf();
@@ -40,10 +41,7 @@ export default function Editor({ theme }: EditorProps) {
   // Get files from storage
   const files = useStorage((root) => root.files);
 
-  // Track current file content locally
-  const [currentContent, setCurrentContent] = useState("");
   const [currentLanguage, setCurrentLanguage] = useState("javascript");
-  const isInitialSync = useRef(true);
 
   // Handle editor mount
   const handleEditorDidMount = (
@@ -56,6 +54,8 @@ export default function Editor({ theme }: EditorProps) {
     // Set window.monaco for other components to use
     if (typeof window !== "undefined") {
       window.monaco = monaco;
+      window.codeCollabEditor = editor;
+      window.codeCollabCurrentFile = null;
 
       // Add custom CSS for cursor tooltips
       const style = document.createElement("style");
@@ -98,23 +98,26 @@ export default function Editor({ theme }: EditorProps) {
   // Update file content in storage
   const updateFileContent = useMutation(
     ({ storage }, fileId: string, content: string) => {
-      const filesMap = storage.get("files") as LiveMap<string, any>;
+      const filesMap = storage.get("files");
       if (!filesMap) return;
 
       const file = filesMap.get(fileId);
-      if (file) {
+      if (file && file.content !== content) {
         filesMap.set(fileId, {
           ...file,
           content,
           lastModified: Date.now(),
         });
       }
+    },
+    []
+  );
 
-      // Add timeline entry for modification
+  const addModifyTimelineEntry = useMutation(
+    ({ storage }, fileId: string) => {
       const timelineList = storage.get("timeline");
       const username = self?.presence.username || "Anonymous";
 
-      // Create the new timeline entry
       const newEntry = {
         id: Date.now().toString(),
         fileId,
@@ -124,29 +127,16 @@ export default function Editor({ theme }: EditorProps) {
         timestamp: Date.now(),
       };
 
-      // Check if timelineList exists and is a LiveList
-      if (timelineList) {
-        // Check if it's a LiveList by checking for push method
-        if (
-          typeof timelineList === "object" &&
-          "push" in timelineList &&
-          typeof timelineList.push === "function"
-        ) {
-          // It's a LiveList, use push method
-          (timelineList as any).push(newEntry);
-
-          // Keep only the last 50 entries
-          if ((timelineList as any).length > 50) {
-            // Remove the oldest entry
-            (timelineList as any).delete(0);
-          }
-        } else {
-          // Initialize timeline as LiveList if it's not already
-          storage.set("timeline", new LiveList([newEntry]));
-        }
-      } else {
+      if (!timelineList) {
         // Initialize timeline as LiveList if it doesn't exist
         storage.set("timeline", new LiveList([newEntry]));
+        return;
+      }
+
+      timelineList.push(newEntry);
+
+      if (timelineList.length > 50) {
+        timelineList.delete(0);
       }
     },
     [self]
@@ -164,26 +154,40 @@ export default function Editor({ theme }: EditorProps) {
 
     const editor = editorRef.current;
     const currentFileId = myPresence.currentFile;
-    let timeoutId: NodeJS.Timeout;
 
     const handleContentChange = () => {
+      if (isApplyingExternalUpdateRef.current) {
+        return;
+      }
+
       const content = editor.getValue();
-      setCurrentContent(content);
-      
-      // Debounce Liveblocks network mutation heavily (500ms) to avoid server lag arrays
-      clearTimeout(timeoutId);
-      timeoutId = setTimeout(() => {
-        updateFileContent(currentFileId, content);
-      }, 500);
+      updateFileContent(currentFileId, content);
+
+      if (modifyTimelineTimeoutRef.current) {
+        clearTimeout(modifyTimelineTimeoutRef.current);
+      }
+
+      modifyTimelineTimeoutRef.current = setTimeout(() => {
+        addModifyTimelineEntry(currentFileId);
+      }, 1000);
     };
 
     const disposable = editor.onDidChangeModelContent(handleContentChange);
 
     return () => {
-      clearTimeout(timeoutId);
+      if (modifyTimelineTimeoutRef.current) {
+        clearTimeout(modifyTimelineTimeoutRef.current);
+        modifyTimelineTimeoutRef.current = null;
+      }
       disposable.dispose();
     };
-  }, [editorReady, updateFileContent, isStorageLoaded, myPresence.currentFile]);
+  }, [
+    addModifyTimelineEntry,
+    editorReady,
+    isStorageLoaded,
+    myPresence.currentFile,
+    updateFileContent,
+  ]);
 
   // Update editor when active file changes
   useEffect(() => {
@@ -195,6 +199,10 @@ export default function Editor({ theme }: EditorProps) {
 
     if (fileData) {
       const editor = editorRef.current;
+
+      if (typeof window !== "undefined") {
+        window.codeCollabCurrentFile = currentFileId;
+      }
 
       // Determine language based on file extension
       let language = "javascript"; // default
@@ -232,14 +240,16 @@ export default function Editor({ theme }: EditorProps) {
 
       setCurrentLanguage(language);
 
-      // Only update content if it's different
-      if (fileData.content !== currentContent) {
+      const nextContent = fileData.content || "";
+
+      if (editor.getValue() !== nextContent) {
         // Save current cursor position
         const position = editor.getPosition();
 
         // Update content
-        editor.setValue(fileData.content);
-        setCurrentContent(fileData.content);
+        isApplyingExternalUpdateRef.current = true;
+        editor.setValue(nextContent);
+        isApplyingExternalUpdateRef.current = false;
 
         // Restore cursor position
         if (position) {
@@ -248,7 +258,7 @@ export default function Editor({ theme }: EditorProps) {
         }
       }
     }
-  }, [editorReady, files, myPresence.currentFile, currentContent]);
+  }, [editorReady, files, myPresence.currentFile]);
 
   // Handle cursor and selection updates
   useEffect(() => {
@@ -438,7 +448,6 @@ export default function Editor({ theme }: EditorProps) {
   useEffect(() => {
     if (editorReady && editorRef.current) {
       const isDarkTheme = document.documentElement.classList.contains("dark");
-      const editor = editorRef.current;
       const monaco = window.monaco;
 
       if (monaco) {
@@ -447,13 +456,24 @@ export default function Editor({ theme }: EditorProps) {
     }
   }, [editorReady, theme]); // Add theme as a dependency
 
+  useEffect(() => {
+    return () => {
+      if (
+        typeof window !== "undefined" &&
+        window.codeCollabEditor === editorRef.current
+      ) {
+        window.codeCollabEditor = null;
+        window.codeCollabCurrentFile = null;
+      }
+    };
+  }, []);
+
   // Update the MonacoEditor component to use a dynamic theme
   return (
     <div className="relative h-full w-full">
       <MonacoEditor
         height="100%"
         language={currentLanguage}
-        value={currentContent}
         theme={theme === "dark" ? "vs-dark" : "light"}
         options={{
           minimap: { enabled: true },

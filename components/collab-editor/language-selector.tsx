@@ -35,25 +35,58 @@ export const languages: Language[] = [
   { id: "php", name: "PHP", type: "non-web", extension: "php" },
 ]
 
+export function getLanguageForExtension(extension?: string) {
+  const normalizedExtension = extension?.toLowerCase()
+
+  if (!normalizedExtension) {
+    return undefined
+  }
+
+  switch (normalizedExtension) {
+    case "tsx":
+    case "jsx":
+      return languages.find((language) => language.id === "react")
+    case "css":
+    case "html":
+    case "htm":
+      return languages.find((language) => language.id === "html")
+    case "mjs":
+    case "cjs":
+      return languages.find((language) => language.id === "javascript")
+    case "mts":
+    case "cts":
+      return languages.find((language) => language.id === "typescript")
+    default:
+      return languages.find((language) => language.extension === normalizedExtension)
+  }
+}
+
 interface LanguageSelectorProps {
   onLanguageChange: (language: Language) => void
   currentLanguage?: Language
+  autoSelectDefault?: boolean
 }
 
-export function LanguageSelector({ onLanguageChange, currentLanguage }: LanguageSelectorProps) {
+export function LanguageSelector({
+  onLanguageChange,
+  currentLanguage,
+  autoSelectDefault = true,
+}: LanguageSelectorProps) {
   const [open, setOpen] = useState(false)
   const [value, setValue] = useState<Language | undefined>(currentLanguage)
 
   useEffect(() => {
     if (currentLanguage) {
       setValue(currentLanguage)
-    } else {
+    } else if (autoSelectDefault) {
       // Default to JavaScript if no language is selected
       const defaultLanguage = languages.find((lang) => lang.id === "javascript")
       setValue(defaultLanguage)
       if (defaultLanguage) onLanguageChange(defaultLanguage)
+    } else {
+      setValue(undefined)
     }
-  }, [currentLanguage, onLanguageChange])
+  }, [autoSelectDefault, currentLanguage, onLanguageChange])
 
   return (
     <Popover open={open} onOpenChange={setOpen}>

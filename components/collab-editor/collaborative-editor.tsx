@@ -19,6 +19,7 @@ import {
   ResizablePanelGroup,
 } from "@/components/ui/resizable";
 import type { Storage } from "@/liveblocks.config";
+import { getInitialFileContent } from "@/lib/editor-file-templates";
 
 interface CollaborativeEditorProps {
   sessionId: string;
@@ -81,12 +82,7 @@ export default function CollaborativeEditor({
             },
             body: JSON.stringify({
               path: defaultFileName,
-              content: `// ${defaultFileName}
-// Created: ${new Date().toLocaleString()}
-
-// Welcome to CodeCollab!
-// Start coding here...
-`,
+              content: getInitialFileContent(defaultFileName, "js"),
             }),
           });
         }

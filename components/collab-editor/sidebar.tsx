@@ -71,6 +71,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { toast } from "@/components/ui/use-toast";
+import { getInitialFileContent } from "@/lib/editor-file-templates";
 
 // Define file type
 type FileData = {
@@ -224,16 +225,25 @@ export default function Sidebar({ sessionId }: SidebarProps) {
       const fileName = `${newFileName}.${newFileType}`;
       const filePath = currentPath ? `${currentPath}/${fileName}` : fileName;
       const fileId = filePath;
+      const filesMap = storage.get("files");
+
+      if (filesMap?.has(fileId)) {
+        toast({
+          title: "File already exists",
+          description: `A file named ${fileName} already exists in this folder.`,
+          variant: "destructive",
+        });
+        return;
+      }
 
       const newFile: FileData = {
         id: fileId,
         name: filePath,
-        content: `// ${fileName}\n// Created: ${new Date().toLocaleString()}\n\n`,
+        content: getInitialFileContent(fileName, newFileType),
         type: newFileType,
         lastModified: Date.now(),
       };
 
-      const filesMap = storage.get("files");
       if (filesMap) {
         filesMap.set(fileId, newFile);
       }
