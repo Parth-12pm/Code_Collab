@@ -12,9 +12,10 @@ import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/componen
 interface SandpackPreviewProps {
   language: string
   code: string
+  workspaceFiles?: Record<string, string>
 }
 
-export function SandpackPreview({ language, code }: SandpackPreviewProps) {
+export function SandpackPreview({ language, code, workspaceFiles }: SandpackPreviewProps) {
   const [files, setFiles] = useState<Record<string, { code: string }>>({})
   const [isHtmlOnly, setIsHtmlOnly] = useState(false)
 
@@ -175,9 +176,60 @@ document.getElementById("app").innerHTML = \`
         }
       }
 
-      setFiles(jsFiles)
+      // Finally, if workspaceFiles are provided, layer them on top dynamically
+      // so users have access to all their custom files across all templates.
+      if (workspaceFiles && Object.keys(workspaceFiles).length > 0) {
+        const overlayFiles = { ...jsFiles }; // Or whatever base files we matched
+
+        // Special handling depending on language base
+        let baseFiles = jsFiles;
+        if (language === 'html' || isPureHtml) {
+          baseFiles = { "/index.html": { code } };
+        } else if (language === 'react') {
+            baseFiles = {
+              "/App.js": { code },
+              "/index.js": { code: `import React from "react";\nimport ReactDOM from "react-dom";\nimport App from "./App";\nReactDOM.render(<React.StrictMode><App /></React.StrictMode>, document.getElementById("root"));` },
+              "/index.html": { code: `<!DOCTYPE html><html><head><meta charset="utf-8"><title>React Preview</title></head><body><div id="root"></div></body></html>` }
+            };
+        } else if (language === 'vue') {
+            baseFiles = {
+              "/App.vue": { code },
+              "/main.js": { code: `import { createApp } from "vue";\nimport App from "./App.vue";\ncreateApp(App).mount("#app");` },
+              "/index.html": { code: `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Vue Preview</title></head><body><div id="app"></div></body></html>` }
+            };
+        } else if (language === 'svelte') {
+            baseFiles = {
+              "/App.svelte": { code },
+              "/main.js": { code: `import App from "./App.svelte";\nconst app = new App({target: document.body});\nexport default app;` },
+              "/index.html": { code: `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Svelte Preview</title></head><body></body></html>` }
+            };
+        }
+
+        // Apply all workspace files over top
+        Object.entries(workspaceFiles).forEach(([path, fileCode]) => {
+          // Normalize path for Sandpack
+          const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+          baseFiles[normalizedPath] = { code: fileCode };
+        });
+
+        // Ensure the active code is the entry/main view
+        if (language === 'react') {
+            baseFiles['/App.js'] = { code };
+        } else if (language === 'vue') {
+            baseFiles['/App.vue'] = { code };
+        } else if (language === 'svelte') {
+            baseFiles['/App.svelte'] = { code };
+        } else if (language === 'html' || isPureHtml) {
+            baseFiles['/index.html'] = { code };
+        }
+
+        setFiles(baseFiles);
+      } else {
+        setFiles(jsFiles);
+      }
+
     }
-  }, [language, code])
+  }, [language, code, workspaceFiles])
 
   // Get the template based on the language
   const getTemplate = () => {

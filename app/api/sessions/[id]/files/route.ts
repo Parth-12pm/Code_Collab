@@ -72,7 +72,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     }
 
     // Check if file already exists
-    const fileIndex = editorSession.files.findIndex((f) => f.path === path)
+    const fileIndex = editorSession.files.findIndex((f: any) => f.path === path)
 
     if (fileIndex >= 0) {
       // Update existing file
@@ -144,7 +144,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
 
     // Remove the file
     if (editorSession.files) {
-      editorSession.files = editorSession.files.filter((f) => f.path !== path)
+      editorSession.files = editorSession.files.filter((f: any) => f.path !== path)
       await editorSession.save()
     }
 

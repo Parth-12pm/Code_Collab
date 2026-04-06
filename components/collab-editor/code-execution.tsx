@@ -113,6 +113,21 @@ export function CodeExecution() {
     root.executionResults?.get(executionId)
   );
 
+  // Parse files into a standard record for Sandpack bundler
+  const getWorkspaceFiles = () => {
+    if (!files) return {};
+    const workspaceFiles: Record<string, string> = {};
+    
+    for (const [key, file] of Array.from(files.entries())) {
+      if (file && file.content) {
+        const fileObj = file as any;
+        const path = fileObj.path || fileObj.name || key;
+        workspaceFiles[path] = file.content;
+      }
+    }
+    return workspaceFiles;
+  };
+
   // Handle language change
   const handleLanguageChange = (newLanguage: Language) => {
     setLanguage(newLanguage);
@@ -394,94 +409,17 @@ export function CodeExecution() {
       // Clear previous output
       setOutput("");
 
-      // For HTML files, set up preview
-      if (type === "html") {
-        setPreviewHtml(content);
+      const webTypes = ["html", "css", "jsx", "tsx", "vue", "svelte"];
+
+      // For Web Frameworks, we use the SandpackPreview
+      if (webTypes.includes(type)) {
         isWeb = true;
-        result = "HTML preview is ready";
-        setTerminalTab("preview");
-      }
-      // For React JSX/TSX files
-      else if (type === "jsx" || type === "tsx") {
-        // Create a React preview
-        const htmlTemplate = `
-          <!DOCTYPE html>
-          <html>
-          <head>
-            <meta charset="UTF-8" />
-            <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-            <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
-            <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
-            <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-            <style>
-              body { font-family: sans-serif; margin: 0; padding: 20px; }
-            </style>
-          </head>
-          <body>
-            <div id="root"></div>
-            <script type="text/babel">
-            ${content}
-            
-            // Try to render the component
-             try {
-              const rootElement = document.getElementById('root');
-              // Find the default export or the first component
-              const componentNames = Object.keys(window).filter(key => 
-                typeof window[key] === 'function' && 
-                /^[A-Z]/.test(key) && 
-                key !== 'React' && 
-                key !== 'ReactDOM'
-              );
-              
-              if (componentNames.length > 0) {
-                const ComponentToRender = window[componentNames[0]];
-                ReactDOM.render(React.createElement(ComponentToRender), rootElement);
-              } else {
-                rootElement.innerHTML = '<p>No React component component to render</p>';
-              }
-            } catch (error) {
-              document.getElementById('root').innerHTML = '<p>Error rendering component: ' + error.message + '</p>';
-              console.error(error);
-            }
-            </script>
-          </body>
-          </html>
-        `;
-        setPreviewHtml(htmlTemplate);
-        isWeb = true;
-        result = "React component preview is ready";
-        setTerminalTab("preview");
-      }
-      // For CSS files
-      else if (type === "css") {
-        // Create a simple HTML preview with the CSS applied
-        const htmlTemplate = `
-          <!DOCTYPE html>
-          <html>
-          <head>
-            <meta charset="UTF-8" />
-            <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-            <style>${content}</style>
-          </head>
-          <body>
-            <div class="container">
-              <h1>CSS Preview</h1>
-              <p>This is a preview of your CSS styles applied to some basic HTML elements.</p>
-              <button>Button</button>
-              <div class="box">Box Element</div>
-              <ul>
-                <li>List Item 1</li>
-                <li>List Item 2</li>
-                <li>List Item 3</li>
-              </ul>
-            </div>
-          </body>
-          </html>
-        `;
-        setPreviewHtml(htmlTemplate);
-        isWeb = true;
-        result = "CSS preview is ready";
-        setTerminalTab("preview");
+        result = `${type.toUpperCase()} preview actively running in the Resizable Panel`;
+        setPreviewHtml(""); // We no longer use the rudimentary iframe
+        
+        // Give feedback in the terminal panel
+        terminal.writeln("Sandpack Bundler starting...");
+        terminal.writeln(`Bundling ${type.toUpperCase()} environment successfully. Expand the bottom Preview panel.`);
       }
       // For JavaScript files (non-React)
       else if (type === "js" || type === "ts") {
@@ -789,6 +727,7 @@ export function CodeExecution() {
                       <SandpackPreview
                         language={executionResult.language}
                         code={executionResult.code}
+                        workspaceFiles={getWorkspaceFiles()}
                       />
                     ) : (
                       <NonWebPreview result={executionResult.result} />

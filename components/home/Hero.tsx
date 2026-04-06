@@ -18,7 +18,7 @@ export default function Hero() {
     mouseY.set(clientY - top)
   }
 
-  const spring = {
+  const spring: any = {
     type: "spring",
     damping: 10,
     stiffness: 100,

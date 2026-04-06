@@ -29,7 +29,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     await editorSession.save()
 
     // Check if user is already a participant
-    const isParticipant = editorSession.participants.some((p) => p.userId === session.user.id)
+    const isParticipant = editorSession.participants.some((p: any) => p.userId === session.user.id)
 
     // If not a participant, add them (unless it's a private room with password)
     if (!isParticipant) {
@@ -85,7 +85,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     }
 
     // Check if user is already a participant
-    const isParticipant = editorSession.participants.some((p) => p.userId === session.user.id)
+    const isParticipant = editorSession.participants.some((p: any) => p.userId === session.user.id)
 
     // If not a participant, add them
     if (!isParticipant) {

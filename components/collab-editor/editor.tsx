@@ -12,7 +12,7 @@ import {
 import { useMutation } from "@liveblocks/react";
 import type { editor } from "monaco-editor";
 import dynamic from "next/dynamic";
-import { LiveList } from "@liveblocks/client";
+import { LiveList, LiveMap } from "@liveblocks/client";
 
 // Dynamically import monaco editor
 const MonacoEditor = dynamic(() => import("@monaco-editor/react"), {
@@ -98,7 +98,7 @@ export default function Editor({ theme }: EditorProps) {
   // Update file content in storage
   const updateFileContent = useMutation(
     ({ storage }, fileId: string, content: string) => {
-      const filesMap = storage.get("files");
+      const filesMap = storage.get("files") as LiveMap<string, any>;
       if (!filesMap) return;
 
       const file = filesMap.get(fileId);
@@ -164,16 +164,23 @@ export default function Editor({ theme }: EditorProps) {
 
     const editor = editorRef.current;
     const currentFileId = myPresence.currentFile;
+    let timeoutId: NodeJS.Timeout;
 
     const handleContentChange = () => {
       const content = editor.getValue();
       setCurrentContent(content);
-      updateFileContent(currentFileId, content);
+      
+      // Debounce Liveblocks network mutation heavily (500ms) to avoid server lag arrays
+      clearTimeout(timeoutId);
+      timeoutId = setTimeout(() => {
+        updateFileContent(currentFileId, content);
+      }, 500);
     };
 
     const disposable = editor.onDidChangeModelContent(handleContentChange);
 
     return () => {
+      clearTimeout(timeoutId);
       disposable.dispose();
     };
   }, [editorReady, updateFileContent, isStorageLoaded, myPresence.currentFile]);
@@ -248,6 +255,7 @@ export default function Editor({ theme }: EditorProps) {
     if (!editorReady || !editorRef.current) return;
 
     const editor = editorRef.current;
+    let timeoutId: NodeJS.Timeout;
 
     const updateCursorAndSelection = () => {
       const selection = editor.getSelection();
@@ -256,20 +264,24 @@ export default function Editor({ theme }: EditorProps) {
       const position = editor.getPosition();
       if (!position) return;
 
-      updateMyPresence({
-        cursor: {
-          line: position.lineNumber,
-          column: position.column,
-        },
-        selection: selection
-          ? {
-              startLine: selection.startLineNumber,
-              startColumn: selection.startColumn,
-              endLine: selection.endLineNumber,
-              endColumn: selection.endColumn,
-            }
-          : null,
-      });
+      // Throttle cursor updates to 50ms to prevent presence flooding
+      clearTimeout(timeoutId);
+      timeoutId = setTimeout(() => {
+        updateMyPresence({
+          cursor: {
+            line: position.lineNumber,
+            column: position.column,
+          },
+          selection: selection
+            ? {
+                startLine: selection.startLineNumber,
+                startColumn: selection.startColumn,
+                endLine: selection.endLineNumber,
+                endColumn: selection.endColumn,
+              }
+            : null,
+        });
+      }, 50);
     };
 
     const disposables = [
@@ -278,6 +290,7 @@ export default function Editor({ theme }: EditorProps) {
     ];
 
     return () => {
+      clearTimeout(timeoutId);
       disposables.forEach((disposable) => disposable.dispose());
     };
   }, [editorReady, updateMyPresence]);

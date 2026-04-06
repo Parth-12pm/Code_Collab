@@ -59,31 +59,50 @@ export async function POST(req: NextRequest) {
   try {
     const { messages } = await req.json()
 
-    // Get the last user message
-    const lastUserMessage = messages.filter((msg: any) => msg.role === "user").pop()
-
-    if (!lastUserMessage) {
+    // Map existing messages to Gemini format preserving history
+    const contents = messages.map((msg: any) => ({
+      role: msg.role === "assistant" ? "model" : "user",
+      parts: [{ text: msg.content }],
+    }))
+    
+    // Inject system prompt into the very first message
+    if (contents.length > 0) {
+      if (contents[0].role === "user") {
+        contents[0].parts[0].text = `${SYSTEM_PROMPT}\n\n${contents[0].parts[0].text}`
+      } else {
+        contents.unshift({ role: "user", parts: [{ text: SYSTEM_PROMPT }] })
+      }
+    } else {
       return NextResponse.json({
         response: "Hello! I'm your coding assistant. How can I help you with programming today?",
       })
     }
 
-    // Use the content generation API with the system prompt
-    const result = await model.generateContent({
-      contents: [
-        {
-          role: "user",
-          parts: [
-            {
-              text: `${SYSTEM_PROMPT}\n\nUser question: ${lastUserMessage.content}`,
-            },
-          ],
-        },
-      ],
+    const result = await model.generateContentStream({ contents })
+    
+    // Stream response back to client 
+    const encoder = new TextEncoder()
+    const readableStream = new ReadableStream({
+      async start(controller) {
+        try {
+          for await (const chunk of result.stream) {
+            controller.enqueue(encoder.encode(chunk.text()))
+          }
+          controller.close()
+        } catch (error) {
+          console.error("Stream error:", error)
+          controller.error(error)
+        }
+      }
     })
-
-    const response = result.response.text()
-    return NextResponse.json({ response })
+    
+    return new Response(readableStream, {
+      headers: {
+        'Content-Type': 'text/plain; charset=utf-8',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+      }
+    })
   } catch (error) {
     console.error("Error in chat API:", error)
 

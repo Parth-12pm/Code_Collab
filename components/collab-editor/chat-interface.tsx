@@ -8,6 +8,7 @@ import { Card } from "@/components/ui/card"
 import { X, Copy, Check, AlertCircle } from "lucide-react"
 import { cn } from "@/lib/utils"
 import ReactMarkdown from "react-markdown"
+import { useStorage, useMyPresence } from "@/liveblocks.config"
 
 interface Message {
   role: "user" | "assistant"
@@ -28,6 +29,20 @@ export default function ChatInterface({ onClose }: ChatInterfaceProps) {
   const [showScrollbar, setShowScrollbar] = useState(false)
   const [copiedCode, setCopiedCode] = useState<string | null>(null)
   const [copyError, setCopyError] = useState<boolean>(false)
+
+  const files = useStorage((root) => root.files)
+  const [myPresence] = useMyPresence()
+
+  const getCurrentFileContext = () => {
+    try {
+        if (!myPresence?.currentFile || !files) return ""
+        const file = files.get(myPresence.currentFile)
+        if (!file || !file.content) return ""
+        return `\n\n[SYSTEM CONTEXT: The user is currently editing the file "${file.name || myPresence.currentFile}". Here is the active code:]\n\`\`\`${file.type || ""}\n${file.content}\n\`\`\``
+    } catch {
+       return ""
+    }
+  }
 
   // Check if scrollbar is needed
   useEffect(() => {
@@ -80,23 +95,51 @@ export default function ChatInterface({ onClose }: ChatInterfaceProps) {
     setIsLoading(true)
 
     try {
+      const activeContext = getCurrentFileContext()
+      const apiMessages = [...messages, userMessage].map((msg, idx, arr) => {
+        // Only append context to the very last user message sent to the API
+        if (idx === arr.length - 1 && activeContext) {
+           return { ...msg, content: `${msg.content}${activeContext}` }
+        }
+        return msg
+      })
+
       const response = await fetch("/api/chat", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          messages: [...messages, userMessage],
+          messages: apiMessages,
         }),
       })
 
-      const data = await response.json()
-
       if (!response.ok) {
+        const data = await response.json().catch(() => ({}))
         throw new Error(data.details || data.error || "Failed to get response")
       }
 
-      setMessages((prev) => [...prev, { role: "assistant", content: data.response }])
+      // Add empty assistant message that will be populated by stream
+      setMessages((prev) => [...prev, { role: "assistant", content: "" }])
+      
+      const reader = response.body?.getReader()
+      const decoder = new TextDecoder()
+      let assistantMessage = ""
+
+      if (reader) {
+        while (true) {
+          const { done, value } = await reader.read()
+          if (done) break
+          const text = decoder.decode(value, { stream: true })
+          assistantMessage += text
+          // Update the last message progressively
+          setMessages((prev) => {
+            const newMessages = [...prev]
+            newMessages[newMessages.length - 1].content = assistantMessage
+            return newMessages
+          })
+        }
+      }
     } catch (error) {
       console.error("Error:", error)
       setMessages((prev) => [
